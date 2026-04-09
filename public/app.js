@@ -351,6 +351,7 @@ init();
 
 function init() {
   applyTheme();
+  primePointerGlow();
 
   if (window.location.pathname === "/") {
     window.history.replaceState({}, "", "/redeem/chatgpt");
@@ -359,6 +360,7 @@ function init() {
   document.addEventListener("click", handleClick);
   document.addEventListener("input", handleInput);
   document.addEventListener("keydown", handleKeyDown);
+  document.addEventListener("pointermove", handlePointerMove, { passive: true });
 
   render();
 }
@@ -508,6 +510,16 @@ function handleKeyDown(event) {
     event.preventDefault();
     queryTask();
   }
+}
+
+function handlePointerMove(event) {
+  document.documentElement.style.setProperty("--pointer-x", `${event.clientX}px`);
+  document.documentElement.style.setProperty("--pointer-y", `${event.clientY}px`);
+}
+
+function primePointerGlow() {
+  document.documentElement.style.setProperty("--pointer-x", `${Math.round(window.innerWidth * 0.72)}px`);
+  document.documentElement.style.setProperty("--pointer-y", `${Math.round(window.innerHeight * 0.22)}px`);
 }
 
 function render() {
