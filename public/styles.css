@@ -1057,17 +1057,28 @@ html[dir="rtl"] .control-deck {
     padding-top: 14px;
   }
 
-  .hero-stage,
-  .mission-panel,
-  .radar-panel,
   .command-stage,
-  .credit-strip,
   .modal-card {
     padding: 18px;
   }
 
   .hero-title {
     font-size: clamp(3.4rem, 18vw, 5rem);
+  }
+
+  .hero-stage,
+  .mission-column,
+  .duel-grid > .command-stage:first-child,
+  .credit-strip {
+    display: none;
+  }
+
+  .story-board {
+    margin-top: 0;
+  }
+
+  .battle-column {
+    gap: 16px;
   }
 
   .hero-actions,
