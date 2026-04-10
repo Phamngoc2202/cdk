@@ -1,4 +1,3 @@
-﻿const API_BASE = "https://receipt-api.nitro.xin";
 const PRODUCT_ID = "chatgpt";
 const POLL_INTERVAL_MS = 3000;
 const STORAGE_LANGUAGE_KEY = "redeem_chatgpt_language";
@@ -1219,12 +1218,8 @@ async function validateCdk({ silent = false, channel = "channel1" } = {}) {
     const result =
       channel === "channel2"
         ? await checkChannel2Cdk(code)
-        : await apiJson("/cdks/public/check", {
+        : await apiJson("/api/channel1/check-cdk", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Product-ID": PRODUCT_ID,
-            },
             body: JSON.stringify({ code }),
           });
 
@@ -1315,11 +1310,8 @@ async function validateAuthSession({ silent = false } = {}) {
   render();
 
   try {
-    const result = await apiJson("/external/public/check-user", {
+    const result = await apiJson("/api/channel1/check-auth", {
       method: "POST",
-      headers: {
-        "X-Product-ID": PRODUCT_ID,
-      },
       body: JSON.stringify({
         user: authValue,
         cdk: state.redeem.validatedCdkValue,
@@ -1381,13 +1373,9 @@ async function startRedeem(channel = "channel1") {
   try {
     const cdk = normalize(state.redeem.cdkInput);
     const user = state.redeem.validatedAuthValue;
-    const endpoint = cdk.startsWith("R_") ? "/aftersale/public/redeem" : "/stocks/public/outstock";
 
-    const taskId = await apiText(endpoint, {
+    const taskId = await apiText("/api/channel1/redeem", {
       method: "POST",
-      headers: {
-        "X-Device-Id": "web",
-      },
       body: JSON.stringify({ cdk, user }),
     });
 
@@ -1528,9 +1516,9 @@ async function queryBatch(channel = "channel1") {
           }))
         : [];
     } else {
-      const results = await apiJson("/cdks/public/check-usage2", {
+      const results = await apiJson("/api/channel1/batch-query", {
         method: "POST",
-        body: codes.map(encodeURIComponent).join("\n"),
+        body: JSON.stringify({ codes }),
       });
 
       state.batch.results = Array.isArray(results)
@@ -1574,7 +1562,7 @@ async function copyBatch(kind) {
 }
 
 async function fetchTask(taskId) {
-  const raw = await apiJson(`/stocks/public/outstock/${encodeURIComponent(taskId)}`, {
+  const raw = await apiJson(`/api/channel1/task/${encodeURIComponent(taskId)}`, {
     method: "GET",
   });
   return normalizeTaskResponse(raw);
@@ -2054,7 +2042,15 @@ function languageBadge(language) {
 }
 
 async function apiJson(path, options) {
-  const response = await fetch(`${API_BASE}${path}`, options);
+  const headers = new Headers(options?.headers || {});
+  if (options?.body != null && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(path, {
+    ...options,
+    headers,
+  });
   const raw = await response.text();
 
   if (!response.ok) {
@@ -2069,7 +2065,15 @@ async function apiJson(path, options) {
 }
 
 async function apiText(path, options) {
-  const response = await fetch(`${API_BASE}${path}`, options);
+  const headers = new Headers(options?.headers || {});
+  if (options?.body != null && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(path, {
+    ...options,
+    headers,
+  });
   const raw = await response.text();
 
   if (!response.ok) {
