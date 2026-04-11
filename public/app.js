@@ -436,7 +436,7 @@ function handleClick(event) {
       render();
       break;
     case "toggle-theme":
-      state.theme = state.theme === "dark" ? "light" : "dark";
+      state.theme = state.theme === "purple" ? "dark" : "purple";
       localStorage.setItem(STORAGE_THEME_KEY, state.theme);
       applyTheme();
       render();
@@ -619,21 +619,14 @@ function render() {
       <div class="ink-cloud ink-cloud-b"></div>
       <div class="dot-screen"></div>
       <div class="anime-container">
+        <div class="utility-strip">
+          ${renderUtilityDeck()}
+        </div>
         <header class="hero-stage panel-frame">
           <div class="hero-main">
-            <div class="hero-topline">
-              <div class="hero-stamps">
-                <span class="stamp-badge">${escapeHtml(t().redeemTitle)}</span>
-                <span class="stamp-badge stamp-badge--accent">${escapeHtml(t().guideTitle)}</span>
-              </div>
-              <div class="control-deck">
-                <button type="button" class="lang-toggle" data-action="toggle-language" title="Language">
-                  ${escapeHtml(languageBadge(state.language))}
-                </button>
-                <button type="button" class="icon-toggle" data-action="toggle-theme" title="Theme">
-                  ${renderThemeIcon()}
-                </button>
-              </div>
+            <div class="hero-stamps">
+              <span class="stamp-badge">${escapeHtml(t().redeemTitle)}</span>
+              <span class="stamp-badge stamp-badge--accent">${escapeHtml(t().guideTitle)}</span>
             </div>
             <div class="hero-title-wrap">
               <p class="hero-kicker">${escapeHtml(t().queryTitle)}</p>
@@ -743,6 +736,19 @@ function renderGuideItems() {
       `
     )
     .join("");
+}
+
+function renderUtilityDeck() {
+  return `
+    <div class="control-deck">
+      <button type="button" class="lang-toggle" data-action="toggle-language" title="Language">
+        ${escapeHtml(languageBadge(state.language))}
+      </button>
+      <button type="button" class="icon-toggle" data-action="toggle-theme" title="Theme">
+        ${renderThemeIcon()}
+      </button>
+    </div>
+  `;
 }
 
 function renderRedeemSection() {
@@ -1838,9 +1844,9 @@ function taskMessageBlock(task) {
 }
 
 function renderThemeIcon() {
-  return state.theme === "dark"
-    ? '<span aria-hidden="true">&#9790;</span>'
-    : '<span aria-hidden="true">&#9728;</span>';
+  return state.theme === "purple"
+    ? '<span aria-hidden="true">&#9673;</span>'
+    : '<span aria-hidden="true">&#10022;</span>';
 }
 
 function renderStatusBadge(label, tone = "neutral") {
@@ -1989,7 +1995,7 @@ function isValidRoute() {
 }
 
 function applyTheme() {
-  document.body.classList.remove("dark", "light");
+  document.body.classList.remove("dark", "purple", "light");
   document.body.classList.add(state.theme);
   document.documentElement.lang = state.language;
   document.documentElement.dir = state.language === "ur" ? "rtl" : "ltr";
@@ -2015,10 +2021,13 @@ function getStoredLanguage() {
 
 function getStoredTheme() {
   const stored = localStorage.getItem(STORAGE_THEME_KEY);
-  if (stored === "dark" || stored === "light") {
+  if (stored === "dark" || stored === "purple") {
     return stored;
   }
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  if (stored === "light") {
+    return "purple";
+  }
+  return "dark";
 }
 
 function t() {
