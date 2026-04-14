@@ -96,6 +96,7 @@ const translations = {
       copyEmpty: "Không có dữ liệu để sao chép.",
       channel2Success: "Redeem Kênh 2 thành công.",
       channel2Failed: "Redeem Kênh 2 thất bại.",
+      channel2Unavailable: "Kênh 2 đang tạm thời bị chặn hoặc không phản hồi đúng. Vui lòng thử lại sau.",
     },
     guide: [
       {
@@ -215,6 +216,7 @@ const translations = {
       copyEmpty: "Nothing to copy.",
       channel2Success: "Channel 2 redeem succeeded.",
       channel2Failed: "Channel 2 redeem failed.",
+      channel2Unavailable: "Channel 2 is temporarily blocked or unavailable. Please try again later.",
     },
     guide: [
       {
@@ -334,6 +336,7 @@ const translations = {
       copyEmpty: "کاپی کرنے کے لیے کوئی ڈیٹا نہیں۔",
       channel2Success: "چینل 2 redeem کامیاب ہو گیا۔",
       channel2Failed: "چینل 2 redeem ناکام ہو گیا۔",
+      channel2Unavailable: "چینل 2 عارضی طور پر بلاک ہے یا دستیاب نہیں۔ بعد میں دوبارہ کوشش کریں۔",
     },
     guide: [
       {
@@ -2208,7 +2211,30 @@ function getAuthSessionPlanType(raw) {
 }
 
 function normalizeError(error, fallback) {
-  return error instanceof Error && normalize(error.message) ? error.message.trim() : fallback;
+  const message = error instanceof Error && normalize(error.message) ? error.message.trim() : "";
+  return sanitizeChannel2ErrorMessage(message, fallback);
+}
+
+function sanitizeChannel2ErrorMessage(message, fallback) {
+  const raw = normalize(message);
+  if (!raw) {
+    return fallback;
+  }
+
+  const lowered = raw.toLowerCase();
+  if (
+    lowered.includes("<html") ||
+    lowered.includes("<!doctype html") ||
+    lowered.includes("__cf_chl_") ||
+    lowered.includes("cf_chl_") ||
+    lowered.includes("challenge-platform") ||
+    lowered.includes("attention required") ||
+    lowered.includes("channel2_upstream_blocked")
+  ) {
+    return t().messages.channel2Unavailable || fallback;
+  }
+
+  return raw;
 }
 
 function escapeHtml(value) {
@@ -2450,16 +2476,17 @@ async function apiChannel2Json(path, options = {}) {
       parsed = JSON.parse(raw);
     } catch (_error) {
       if (!response.ok) {
-        throw new Error(raw || `HTTP ${response.status}`);
+        throw new Error(sanitizeChannel2ErrorMessage(raw, t().messages.channel2Unavailable));
       }
-      throw new Error(t().messages.network);
+      throw new Error(sanitizeChannel2ErrorMessage(raw, t().messages.channel2Unavailable));
     }
   }
 
   if (!response.ok) {
-    const message =
-      parsed && typeof parsed === "object" ? decodeLooseText(parsed.message) : decodeLooseText(raw);
-    throw new Error(message || `HTTP ${response.status}`);
+    const message = parsed && typeof parsed === "object"
+      ? decodeLooseText(parsed.error || parsed.message || parsed.code)
+      : decodeLooseText(raw);
+    throw new Error(sanitizeChannel2ErrorMessage(message, t().messages.channel2Unavailable));
   }
 
   return parsed;
