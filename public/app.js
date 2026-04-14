@@ -458,9 +458,11 @@ function handleClick(event) {
       window.open(trigger.dataset.url, "_blank", "noopener,noreferrer");
       break;
     case "validate-cdk":
+      prepareRedeemChannel("channel1");
       validateCdk({ channel: "channel1" });
       break;
     case "validate-cdk-channel2":
+      prepareRedeemChannel("channel2");
       validateCdk({ channel: "channel2" });
       break;
     case "validate-auth":
@@ -808,32 +810,12 @@ function renderRedeemSection() {
           <div class="block-head">
             <div>
               <h3>${escapeHtml(t().labels.cdk)}</h3>
-              <p>${escapeHtml(t().buttons.validateCdk)}</p>
+              <p>${escapeHtml(`${t().buttons.validateCdk} • ${channelLabel(activeChannel)}`)}</p>
             </div>
           </div>
         </div>
         <div class="field-stack">
-          <div class="channel-switch">
-            <button
-              type="button"
-              class="channel-chip ${activeChannel === "channel1" ? "is-active" : ""}"
-              data-action="set-redeem-channel"
-              data-channel="channel1"
-              ${state.redeem.redeeming ? "disabled" : ""}
-            >
-              ${escapeHtml(t().labels.channel1)}
-            </button>
-            <button
-              type="button"
-              class="channel-chip ${activeChannel === "channel2" ? "is-active" : ""}"
-              data-action="set-redeem-channel"
-              data-channel="channel2"
-              ${state.redeem.redeeming ? "disabled" : ""}
-            >
-              ${escapeHtml(t().labels.channel2)}
-            </button>
-          </div>
-          <div class="command-actions">
+          <div class="field-stack">
             <input
               class="input-field ${statusClass(state.redeem.cdkStatus)}"
               data-model="redeem-cdk"
@@ -841,20 +823,32 @@ function renderRedeemSection() {
               placeholder="XXXXXXXXXXXXX / XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
               ${state.redeem.redeeming ? "disabled" : ""}
             />
-            <button
-              type="button"
-              class="${isChannel2 ? "button-secondary" : "button-link"}"
-              data-action="${isChannel2 ? "validate-cdk-channel2" : "validate-cdk"}"
-              ${state.redeem.cdkLoading || state.redeem.redeeming ? "disabled" : ""}
-            >
-              ${escapeHtml(
-                state.redeem.cdkLoading && state.redeem.validatedChannel === activeChannel
-                  ? t().labels.checking
-                  : isChannel2
-                    ? t().buttons.validateCdkCh2
+            <div class="cdk-actions">
+              <button
+                type="button"
+                class="button-secondary ${activeChannel === "channel1" ? "is-active" : ""}"
+                data-action="validate-cdk"
+                ${state.redeem.cdkLoading || state.redeem.redeeming ? "disabled" : ""}
+              >
+                ${escapeHtml(
+                  state.redeem.cdkLoading && activeChannel === "channel1"
+                    ? t().labels.checking
                     : t().buttons.validateCdkCh1
-              )}
-            </button>
+                )}
+              </button>
+              <button
+                type="button"
+                class="button-secondary ${activeChannel === "channel2" ? "is-active" : ""}"
+                data-action="validate-cdk-channel2"
+                ${state.redeem.cdkLoading || state.redeem.redeeming ? "disabled" : ""}
+              >
+                ${escapeHtml(
+                  state.redeem.cdkLoading && activeChannel === "channel2"
+                    ? t().labels.checking
+                    : t().buttons.validateCdkCh2
+                )}
+              </button>
+            </div>
           </div>
           <div class="helper-text">${escapeHtml(isChannel2 ? t().notes.channel2 : t().notes.channel1)}</div>
           <div class="status-inline ${statusColorClass(state.redeem.cdkStatus)}">
@@ -1761,6 +1755,15 @@ function setRedeemChannel(channel) {
   resetCdkValidation();
   resetAuthValidation();
   render();
+}
+
+function prepareRedeemChannel(channel) {
+  const nextChannel = channel === "channel2" ? "channel2" : "channel1";
+  if (state.redeem.channelMode !== nextChannel) {
+    state.redeem.channelMode = nextChannel;
+    resetCdkValidation();
+    resetAuthValidation();
+  }
 }
 
 function getChannel2AuthPreview(raw = state.redeem.authInput) {
