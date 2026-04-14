@@ -30,49 +30,6 @@ async function proxyResponse(res, url, options = {}) {
   }
 }
 
-function looksLikeBlockedUpstream(contentType, text) {
-  const type = String(contentType || "").toLowerCase();
-  const body = String(text || "");
-
-  if (type.includes("text/html")) {
-    return true;
-  }
-
-  return (
-    body.includes("<html") ||
-    body.includes("<!DOCTYPE html") ||
-    body.includes("__cf_chl_") ||
-    body.includes("cf_chl_") ||
-    body.includes("challenge-platform") ||
-    body.includes("Attention Required")
-  );
-}
-
-async function proxyExpectedJson(res, url, options = {}) {
-  try {
-    const response = await fetch(url, options);
-    const text = await response.text();
-    const contentType = response.headers.get("content-type") || "";
-
-    if (looksLikeBlockedUpstream(contentType, text)) {
-      res.status(502).json({
-        code: "CHANNEL2_UPSTREAM_BLOCKED",
-        message: "Channel 2 upstream temporarily blocked or unavailable",
-      });
-      return;
-    }
-
-    res.status(response.status);
-    res.set("content-type", contentType || "application/json; charset=utf-8");
-    res.send(text);
-  } catch (error) {
-    res.status(502).json({
-      code: "CHANNEL2_PROXY_ERROR",
-      message: error instanceof Error ? error.message : "Channel 2 proxy error",
-    });
-  }
-}
-
 async function proxyJson(res, url, payload, headers = {}) {
   await proxyResponse(res, url, {
     method: "POST",
@@ -127,36 +84,19 @@ app.post("/api/channel1/batch-query", async (req, res) => {
 });
 
 app.get("/api/channel2/check-cdk/:code", async (req, res) => {
-  await proxyExpectedJson(res, `${CHANNEL2_BASE}/keys/${encodeURIComponent(req.params.code || "")}`, {
+  await proxyResponse(res, `${CHANNEL2_BASE}/keys/${encodeURIComponent(req.params.code || "")}`, {
     method: "GET",
   });
 });
 
 app.post("/api/channel2/redeem", async (req, res) => {
   const { code, session } = req.body || {};
-  await proxyExpectedJson(res, `${CHANNEL2_BASE}/keys/activate-session`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ code, session }),
-  });
+  await proxyJson(res, `${CHANNEL2_BASE}/keys/activate-session`, { code, session });
 });
 
 app.get("/api/channel2/activation/:code", async (req, res) => {
-  await proxyExpectedJson(res, `${CHANNEL2_BASE}/keys/${encodeURIComponent(req.params.code || "")}/activation`, {
+  await proxyResponse(res, `${CHANNEL2_BASE}/keys/${encodeURIComponent(req.params.code || "")}/activation`, {
     method: "GET",
-  });
-});
-
-app.post("/api/channel2/bulk-status", async (req, res) => {
-  const codes = Array.isArray(req.body?.codes) ? req.body.codes : [];
-  await proxyExpectedJson(res, `${CHANNEL2_BASE}/keys/bulk-status`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ codes }),
   });
 });
 
