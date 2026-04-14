@@ -106,6 +106,10 @@ app.use((_req, res) => {
   res.sendFile(indexFile);
 });
 
-app.listen(port, () => {
-  console.log(`Receipt clone listening on http://localhost:${port}`);
-});
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Receipt clone listening on http://localhost:${port}`);
+  });
+}
+
+module.exports = app;
