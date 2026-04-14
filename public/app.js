@@ -1,5 +1,6 @@
 const PRODUCT_ID = "chatgpt";
 const POLL_INTERVAL_MS = 3000;
+const CHANNEL2_POLL_INTERVAL_MS = 1000;
 const STORAGE_LANGUAGE_KEY = "redeem_chatgpt_language";
 const STORAGE_THEME_KEY = "redeem_chatgpt_theme";
 const LANGUAGE_ORDER = ["vi", "en", "ur"];
@@ -63,6 +64,7 @@ const translations = {
       clearHint: "Nút Xóa sẽ làm sạch nội dung và kết quả của khối này.",
       message: "Thông báo",
       redeemTime: "Thời gian redeem",
+      tokenExpires: "Token hết hạn",
     },
     notes: {
       auth: "Dán nguyên JSON từ AuthSession để kiểm tra tài khoản trước khi redeem.",
@@ -71,6 +73,7 @@ const translations = {
       channel1: "Kênh 1 có bước kiểm tra AuthSession bằng API trước khi redeem.",
       channel2: "Kênh 2 không có bước check tài khoản riêng, nút redeem sẽ gửi trực tiếp AuthSession JSON.",
       channel2Email: "Kênh 2 không có bước check tài khoản. Hệ thống chỉ đọc email từ AuthSession JSON trước khi redeem.",
+      planOverwriteWarning: "Tài khoản này đang có gói Plus. Khi redeem, số ngày Plus hiện tại có thể bị mất và bị đè bằng gói mới.",
     },
     messages: {
       cdkRequired: "Hãy nhập CDK trước.",
@@ -180,6 +183,7 @@ const translations = {
       clearHint: "Clear input and results inside this section.",
       message: "Message",
       redeemTime: "Redeem Time",
+      tokenExpires: "Token Expires",
     },
     notes: {
       auth: "Paste the full AuthSession JSON to verify the account before redeeming.",
@@ -188,6 +192,7 @@ const translations = {
       channel1: "Channel 1 verifies AuthSession through API before redeeming.",
       channel2: "Channel 2 has no separate account-check API. Redeem will send the raw AuthSession JSON directly.",
       channel2Email: "Channel 2 does not verify the account by API. It only reads the email from the AuthSession JSON before redeeming.",
+      planOverwriteWarning: "This account already has a Plus plan. Redeeming may remove the remaining Plus days and overwrite the old plan with the new one.",
     },
     messages: {
       cdkRequired: "Enter a CDK first.",
@@ -297,6 +302,7 @@ const translations = {
       clearHint: "صاف کریں بٹن اس حصے کا ان پٹ اور نتیجہ ہٹا دے گا۔",
       message: "پیغام",
       redeemTime: "Redeem کا وقت",
+      tokenExpires: "Token ختم ہونے کا وقت",
     },
     notes: {
       auth: "Redeem سے پہلے اکاؤنٹ چیک کرنے کے لیے مکمل AuthSession JSON پیسٹ کریں۔",
@@ -305,6 +311,7 @@ const translations = {
       channel1: "چینل 1 میں redeem سے پہلے API کے ذریعے AuthSession چیک ہوتا ہے۔",
       channel2: "چینل 2 میں الگ اکاؤنٹ چیک API نہیں ہے، redeem براہ راست AuthSession JSON بھیجے گا۔",
       channel2Email: "چینل 2 میں اکاؤنٹ چیک API نہیں ہے، redeem سے پہلے صرف AuthSession JSON سے email پڑھا جائے گا۔",
+      planOverwriteWarning: "اس اکاؤنٹ پر پہلے سے Plus plan موجود ہے۔ Redeem کرنے پر پرانے Plus کے باقی دن ختم ہو سکتے ہیں اور نیا plan اس پر لکھ دیا جائے گا۔",
     },
     messages: {
       cdkRequired: "پہلے CDK درج کریں۔",
@@ -436,7 +443,7 @@ function handleClick(event) {
       render();
       break;
     case "toggle-theme":
-      state.theme = state.theme === "purple" ? "dark" : "purple";
+      state.theme = state.theme === "dark" ? "light" : "dark";
       localStorage.setItem(STORAGE_THEME_KEY, state.theme);
       applyTheme();
       render();
@@ -521,7 +528,7 @@ function handleInput(event) {
       resetCdkValidation();
       resetAuthValidation();
     }
-    render();
+    renderPreservingInput(target);
     return;
   }
 
@@ -530,13 +537,13 @@ function handleInput(event) {
     if (target.value.trim() !== state.redeem.validatedAuthValue) {
       resetAuthValidation();
     }
-    render();
+    renderPreservingInput(target);
     return;
   }
 
   if (target.matches("[data-model='task-lookup']")) {
     state.taskLookup.input = target.value;
-    render();
+    renderPreservingInput(target);
     return;
   }
 
@@ -586,6 +593,35 @@ function handlePointerMove(event) {
   document.documentElement.style.setProperty("--pointer-y", `${event.clientY}px`);
 }
 
+function renderPreservingInput(target) {
+  const model = target.getAttribute("data-model");
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  const selectionStart =
+    typeof target.selectionStart === "number" ? target.selectionStart : null;
+  const selectionEnd =
+    typeof target.selectionEnd === "number" ? target.selectionEnd : null;
+
+  render();
+
+  window.scrollTo(scrollX, scrollY);
+
+  if (!model) {
+    return;
+  }
+
+  const nextField = document.querySelector(`[data-model="${CSS.escape(model)}"]`);
+  if (!(nextField instanceof HTMLInputElement) && !(nextField instanceof HTMLTextAreaElement)) {
+    return;
+  }
+
+  nextField.focus({ preventScroll: true });
+
+  if (selectionStart !== null && selectionEnd !== null) {
+    nextField.setSelectionRange(selectionStart, selectionEnd);
+  }
+}
+
 function primePointerGlow() {
   document.documentElement.style.setProperty("--pointer-x", `${Math.round(window.innerWidth * 0.72)}px`);
   document.documentElement.style.setProperty("--pointer-y", `${Math.round(window.innerHeight * 0.22)}px`);
@@ -596,12 +632,9 @@ function render() {
 
   if (!isValidRoute()) {
     app.innerHTML = `
-      <div class="anime-shell">
-        <div class="manga-rays"></div>
-        <div class="ink-cloud ink-cloud-a"></div>
-        <div class="ink-cloud ink-cloud-b"></div>
-        <div class="anime-container">
-          <div class="panel-frame not-found">
+      <div class="simple-shell">
+        <div class="simple-container">
+          <div class="card not-found">
             <h1>404</h1>
             <p>${escapeHtml(t().messages.routeInvalid)}</p>
           </div>
@@ -613,107 +646,69 @@ function render() {
   }
 
   app.innerHTML = `
-    <div class="anime-shell">
-      <div class="manga-rays"></div>
-      <div class="ink-cloud ink-cloud-a"></div>
-      <div class="ink-cloud ink-cloud-b"></div>
-      <div class="dot-screen"></div>
-      <div class="anime-container">
-        <div class="utility-strip">
+    <div class="simple-shell">
+      <div class="simple-container">
+        <header class="topbar">
           ${renderUtilityDeck()}
-        </div>
-        <header class="hero-stage panel-frame">
-          <div class="hero-main">
-            <div class="hero-stamps">
-              <span class="stamp-badge">${escapeHtml(t().redeemTitle)}</span>
-              <span class="stamp-badge stamp-badge--accent">${escapeHtml(t().guideTitle)}</span>
-            </div>
-            <div class="hero-title-wrap">
-              <p class="hero-kicker">${escapeHtml(t().queryTitle)}</p>
-              <h1 class="hero-title">${escapeHtml(t().pageTitle)}</h1>
-              <p class="hero-subtitle">${escapeHtml(t().pageSubtitle)}</p>
-            </div>
-            <div class="hero-actions">
-              <button type="button" class="button-primary" data-action="open-url" data-url="https://chatgpt.com/">
-                ${escapeHtml(t().buttons.openChatGPT)}
-              </button>
-              <button type="button" class="button-secondary" data-action="open-url" data-url="https://chatgpt.com/api/auth/session">
-                ${escapeHtml(t().buttons.openAuthSession)}
-              </button>
-            </div>
-          </div>
         </header>
 
-        <main class="story-board">
-          <aside class="mission-column">
-            <section class="panel-frame mission-panel">
-              <div class="panel-head">
+        <section class="hero-card">
+          <div class="hero-card__copy">
+            <h1>${escapeHtml(t().pageTitle)}</h1>
+            <p>${escapeHtml(t().pageSubtitle)}</p>
+          </div>
+          <div class="hero-card__tools">
+            ${renderUtilityDeck()}
+          </div>
+        </section>
+
+        <section class="workspace-board">
+          <div class="workspace-grid">
+            <aside class="guide-panel section-card">
+              <div class="section-head section-head--compact">
                 <div>
-                  <p class="panel-ribbon">${escapeHtml(t().guideTitle)}</p>
-                  <h2 class="panel-title">${escapeHtml(t().buttons.redeem)}</h2>
-                  <p class="panel-copy">${escapeHtml(t().notes.auth)}</p>
+                  <h2>${escapeHtml(t().guideTitle)}</h2>
                 </div>
               </div>
               <div class="guide-list">${renderGuideItems()}</div>
-            </section>
+            </aside>
 
-            <section class="panel-frame radar-panel">
-              <div class="panel-head">
-                <div>
-                  <p class="panel-ribbon">${escapeHtml(t().labels.currentTask)}</p>
-                  <h2 class="panel-title">${escapeHtml(workspaceState().label)}</h2>
-                  <p class="panel-copy">${escapeHtml(t().messages.footer)}</p>
-                </div>
-              </div>
-              <div class="radar-list">
-                ${renderLivePanel()}
-              </div>
-            </section>
-          </aside>
-
-          <section class="battle-column">
-            <section class="panel-frame command-stage command-stage--main">
-              <div class="panel-head">
-                <div>
-                  <p class="panel-ribbon">${escapeHtml(t().redeemTitle)}</p>
-                  <h2 class="panel-title">${escapeHtml(t().pageTitle)}</h2>
-                  <p class="panel-copy">${escapeHtml(t().notes.auth)}</p>
-                </div>
-              </div>
-              ${renderRedeemSection()}
-            </section>
-
-            <div class="duel-grid">
-              <section class="panel-frame command-stage">
-                <div class="panel-head">
+            <section class="workspace-main">
+              <section class="section-card section-card--primary redeem-panel">
+                <div class="section-head section-head--compact">
                   <div>
-                    <p class="panel-ribbon">${escapeHtml(t().taskTitle)}</p>
-                    <h2 class="panel-title">${escapeHtml(t().labels.currentTask)}</h2>
-                    <p class="panel-copy">${escapeHtml(t().notes.polling)}</p>
+                    <h2>${escapeHtml(t().redeemTitle)}</h2>
+                    <p>${escapeHtml(t().notes.polling)}</p>
+                  </div>
+                  ${renderStatusBadge(workspaceState().label, workspaceState().tone)}
+                </div>
+                ${renderRedeemSection()}
+              </section>
+
+              <section class="section-card lookup-card lookup-card--task">
+                <div class="section-head section-head--compact">
+                  <div>
+                    <h2>${escapeHtml(t().taskTitle)}</h2>
                   </div>
                 </div>
                 ${renderTaskLookupSection()}
               </section>
-
-              <section class="panel-frame command-stage">
-                <div class="panel-head">
-                  <div>
-                    <p class="panel-ribbon">${escapeHtml(t().queryTitle)}</p>
-                    <h2 class="panel-title">${escapeHtml(t().labels.total)}</h2>
-                    <p class="panel-copy">${escapeHtml(t().notes.batch)}</p>
-                  </div>
-                </div>
-                ${renderBatchSection()}
-              </section>
-            </div>
-          </section>
-        </main>
-
-        <footer class="credit-strip panel-frame">
-          <div class="credit-copy">
-            <p class="credit-line">${escapeHtml(t().messages.footer)}</p>
-            ${renderStatusBadge(workspaceState().label, workspaceState().tone)}
+            </section>
           </div>
+        </section>
+
+        <section class="section-card lookup-card lookup-card--batch">
+          <div class="section-head section-head--compact">
+            <div>
+              <h2>${escapeHtml(t().queryTitle)}</h2>
+              <p>${escapeHtml(t().notes.batch)}</p>
+            </div>
+          </div>
+          ${renderBatchSection()}
+        </section>
+
+        <footer class="footer-note">
+          <p>${escapeHtml(t().messages.footer)}</p>
         </footer>
       </div>
     </div>
@@ -726,11 +721,12 @@ function renderGuideItems() {
   return t().guide
     .map(
       (item, index) => `
-        <article class="guide-episode tone-${escapeHtml(item.accent)}">
-          <span class="episode-index">Scene ${String(index + 1).padStart(2, "0")}</span>
-          <div class="episode-copy">
-            <h3 class="episode-title">${escapeHtml(item.title)}</h3>
-            <p class="episode-note">${escapeHtml(item.description)}</p>
+        <article class="guide-item guide-item--${escapeHtml(item.accent || "blue")}">
+          <div class="guide-number guide-number--${escapeHtml(item.accent || "blue")}">${index + 1}</div>
+          <div>
+            <h3>${escapeHtml(item.title)}</h3>
+            <p>${escapeHtml(item.description)}</p>
+            ${renderGuideAction(index)}
           </div>
         </article>
       `
@@ -738,13 +734,33 @@ function renderGuideItems() {
     .join("");
 }
 
+function renderGuideAction(index) {
+  if (index === 1) {
+    return `
+      <button type="button" class="guide-action" data-action="open-url" data-url="https://chatgpt.com/">
+        ${escapeHtml(t().buttons.openChatGPT)}
+      </button>
+    `;
+  }
+
+  if (index === 2) {
+    return `
+      <button type="button" class="guide-action" data-action="open-url" data-url="https://chatgpt.com/api/auth/session">
+        ${escapeHtml(t().buttons.openAuthSession)}
+      </button>
+    `;
+  }
+
+  return "";
+}
+
 function renderUtilityDeck() {
   return `
-    <div class="control-deck">
+    <div class="utility-deck">
       <button type="button" class="lang-toggle" data-action="toggle-language" title="Language">
         ${escapeHtml(languageBadge(state.language))}
       </button>
-      <button type="button" class="icon-toggle" data-action="toggle-theme" title="Theme">
+      <button type="button" class="icon-toggle" data-action="toggle-theme" title="Light / dark">
         ${renderThemeIcon()}
       </button>
     </div>
@@ -772,7 +788,7 @@ function renderRedeemSection() {
     !state.redeem.redeeming &&
     !state.redeem.cdkLoading;
   const launchReady = isChannel2 ? canRedeemChannel2 : canRedeemChannel1;
-  const activeUserDetails = isChannel2 ? channel2PreviewUser : state.redeem.verifiedUser;
+  const hasPlusPlanWarning = getAuthSessionPlanType(state.redeem.authInput) === "plus";
   const authStatus = isChannel2
     ? channel2PreviewUser
       ? statusSuccess(`${t().labels.email}: ${channel2PreviewUser.email}`)
@@ -782,16 +798,18 @@ function renderRedeemSection() {
     : state.redeem.authStatus;
 
   return `
-    <div class="command-grid">
-      <article class="command-card">
-        <div class="command-head">
-          <span class="step-seal">01</span>
-          <div>
-            <div class="command-title">${escapeHtml(t().labels.cdk)}</div>
-            <div class="command-note">${escapeHtml(t().buttons.validateCdk)}</div>
+    <div class="redeem-layout">
+      <article class="card-inner step-card">
+        <div class="step-head">
+          <span class="step-dot">1</span>
+          <div class="block-head">
+            <div>
+              <h3>${escapeHtml(t().labels.cdk)}</h3>
+              <p>${escapeHtml(t().buttons.validateCdk)}</p>
+            </div>
           </div>
         </div>
-        <div class="field-group">
+        <div class="field-stack">
           <div class="channel-switch">
             <button
               type="button"
@@ -842,21 +860,28 @@ function renderRedeemSection() {
         </div>
       </article>
 
-      <article class="command-card">
-        <div class="command-head">
-          <span class="step-seal">02</span>
-          <div>
-            <div class="command-title">${escapeHtml(t().labels.authSession)}</div>
-            <div class="command-note">${escapeHtml(isChannel2 ? t().labels.email : t().buttons.validateAuth)}</div>
+      <article class="card-inner step-card">
+        <div class="step-head">
+          <span class="step-dot">2</span>
+          <div class="block-head">
+            <div>
+              <h3>${escapeHtml(t().labels.authSession)}</h3>
+              <p>${escapeHtml(isChannel2 ? t().labels.email : t().buttons.validateAuth)}</p>
+            </div>
           </div>
         </div>
-        <div class="field-group">
+        <div class="field-stack">
           <textarea
             class="input-field token-field ${statusClass(authStatus)}"
             data-model="redeem-auth"
             placeholder='{"user":{"id":"user-..."},"expires":"..."}'
             ${state.redeem.redeeming ? "disabled" : ""}
           >${escapeHtml(state.redeem.authInput)}</textarea>
+          ${
+            hasPlusPlanWarning
+              ? `<div class="warning-note">${escapeHtml(t().notes.planOverwriteWarning)}</div>`
+              : ""
+          }
           <div class="task-actions">
             ${
               isChannel2
@@ -885,87 +910,48 @@ function renderRedeemSection() {
           <div class="status-inline ${statusColorClass(authStatus)}">
             ${renderInlineStatus(authStatus, state.redeem.authLoading && !isChannel2, t().labels.checking)}
           </div>
+          <div class="submit-inline">
+            <div class="helper-text">${escapeHtml(t().notes.polling)}</div>
+            <button
+              type="button"
+              class="button-primary launch-button ${isChannel2 ? "launch-button--channel2" : ""}"
+              data-action="${isChannel2 ? "start-redeem-channel2" : "start-redeem"}"
+              ${launchReady ? "" : "disabled"}
+            >
+              ${escapeHtml(
+                state.redeem.redeeming
+                  ? t().labels.redeeming
+                  : isChannel2
+                    ? t().buttons.redeemCh2
+                    : t().buttons.redeemCh1
+              )}
+            </button>
+          </div>
         </div>
       </article>
     </div>
 
-    ${renderVerifiedPanels(activeUserDetails)}
-
-    <section class="launch-panel">
-      <div class="launch-copy">
-        <span class="panel-ribbon">${escapeHtml(t().buttons.redeem)}</span>
-        <h3>${escapeHtml(launchReady ? t().labels.ready : t().labels.waiting)}</h3>
-        <p>${escapeHtml(t().notes.polling)}</p>
-      </div>
-      <div class="task-actions">
-        <button
-          type="button"
-          class="button-primary button-primary--large launch-button ${isChannel2 ? "launch-button--channel2" : ""}"
-          data-action="${isChannel2 ? "start-redeem-channel2" : "start-redeem"}"
-          ${launchReady ? "" : "disabled"}
-        >
-          ${escapeHtml(
-            state.redeem.redeeming
-              ? t().labels.redeeming
-              : isChannel2
-                ? t().buttons.redeemCh2
-                : t().buttons.redeemCh1
-          )}
-        </button>
-      </div>
-    </section>
+    ${renderVerifiedPanels()}
   `;
 }
 
-function renderVerifiedPanels(activeUser = state.redeem.verifiedUser) {
-  const blocks = [];
-
-  if (state.redeem.verifiedCdk) {
-    blocks.push(`
-      <section class="intel-card">
-        <div class="intel-topline">
-          <h3>${escapeHtml(t().labels.product)}</h3>
-          ${renderStatusBadge(t().labels.ready, "success")}
-        </div>
-        <div class="info-grid">
-          <div class="task-kv"><strong>${escapeHtml(t().labels.cdk)}</strong><span>${escapeHtml(state.redeem.verifiedCdk.code || "-")}</span></div>
-          <div class="task-kv"><strong>${escapeHtml(t().labels.app)}</strong><span>${escapeHtml(state.redeem.verifiedCdk.app_name || "-")}</span></div>
-          <div class="task-kv"><strong>${escapeHtml(t().labels.product)}</strong><span>${escapeHtml(state.redeem.verifiedCdk.app_product_name || "-")}</span></div>
-        </div>
-      </section>
-    `);
+function renderVerifiedPanels() {
+  if (!state.redeem.task) {
+    return "";
   }
 
-  if (activeUser) {
-    blocks.push(`
-      <section class="intel-card">
-        <div class="intel-topline">
-          <h3>${escapeHtml(t().labels.user)}</h3>
-          ${renderStatusBadge(t().labels.ready, "success")}
-        </div>
-        <ul class="verified-list">
-          ${formatUserDetails(activeUser)
-            .map((line) => `<li>${escapeHtml(line)}</li>`)
-            .join("")}
-        </ul>
-      </section>
-    `);
-  }
-
-  if (state.redeem.task) {
-    blocks.push(`
-      <section class="intel-card">
-        <div class="intel-topline">
+  return `
+    <div class="summary-grid summary-grid--single">
+      <section class="summary-card">
+        <div class="summary-head">
           <h3>${escapeHtml(t().labels.currentTask)}</h3>
           ${renderStatusBadge(taskStatusLabel(state.redeem.task), taskTone(state.redeem.task))}
         </div>
         ${renderTaskSummary(state.redeem.task)}
         <div class="helper-text">${escapeHtml(t().notes.polling)}</div>
       </section>
-    `);
-  }
-
-  return blocks.length ? `<div class="intel-grid">${blocks.join("")}</div>` : "";
+    </div>
+  `;
 }
 
 function renderTaskLookupSection() {
@@ -1096,7 +1082,7 @@ function renderFilterButton(filter, label) {
   return `
     <button
       type="button"
-      class="filter-tab ${active ? "is-active" : ""}"
+      class="filter-chip ${active ? "is-active" : ""}"
       data-action="set-batch-filter"
       data-filter="${escapeHtml(filter)}"
     >
@@ -1106,9 +1092,22 @@ function renderFilterButton(filter, label) {
 }
 
 function renderBatchItem(item) {
+  const isChannel2 = state.batch.lastChannel === "channel2";
+
+  if (isChannel2) {
+    return `
+      <article class="usage-card">
+        <div class="summary-head">
+          <h3>${escapeHtml(item.code || "-")}</h3>
+          ${renderStatusBadge(batchStatusLabel(item.status), batchTone(item.status))}
+        </div>
+      </article>
+    `;
+  }
+
   return `
     <article class="usage-card">
-      <div class="intel-topline">
+      <div class="summary-head">
         <h3>${escapeHtml(item.code || "-")}</h3>
         ${renderStatusBadge(batchStatusLabel(item.status), batchTone(item.status))}
       </div>
@@ -1193,8 +1192,8 @@ function renderLivePanel() {
   return lines
     .map(
       (item) => `
-        <div class="radar-row">
-          <span class="radar-label">${escapeHtml(item.label)}</span>
+        <div class="status-row">
+          <span>${escapeHtml(item.label)}</span>
           ${renderStatusBadge(item.value, item.tone)}
         </div>
       `
@@ -1489,7 +1488,7 @@ async function queryTask() {
 }
 
 async function queryBatch(channel = "channel1") {
-  const codes = parseBatchCodes(state.batch.input);
+  const codes = channel === "channel2" ? parseChannel2BatchCodes(state.batch.input) : parseBatchCodes(state.batch.input);
   if (!codes.length) {
     showModal("error", t().labels.failure, t().messages.batchRequired);
     return;
@@ -1502,25 +1501,42 @@ async function queryBatch(channel = "channel1") {
 
   try {
     if (channel === "channel2") {
-      const results = await apiChannel2Json("/api/channel2/cdks", {
-        method: "POST",
-        body: JSON.stringify(codes),
-      });
+      state.batch.results = await Promise.all(
+        codes.map(async (code) => {
+          try {
+            const item = await checkChannel2Cdk(code);
+            return {
+              code,
+              status: normalizeChannel2SingleStatus(item?.status),
+              user: "",
+              redeem_time: "",
+              app_name: "",
+              product_name: "",
+            };
+          } catch (error) {
+            const message = normalizeError(error, "");
+            if (message === t().messages.cdkUsed) {
+              return {
+                code,
+                status: "used",
+                user: "",
+                redeem_time: "",
+                app_name: "",
+                product_name: "",
+              };
+            }
 
-      if (results.code !== 1) {
-        throw new Error(decodeLooseText(results.message) || t().messages.taskFailed);
-      }
-
-      state.batch.results = Array.isArray(results.data)
-        ? results.data.map((item) => ({
-            code: item.cdk || item.carmi || "",
-            status: normalizeChannel2BatchStatus(item.useStatus),
-            user: item.account || "",
-            redeem_time: item.usedAt || "",
-            app_name: t().labels.channel2,
-            product_name: PRODUCT_ID,
-          }))
-        : [];
+            return {
+              code,
+              status: "invalid",
+              user: "",
+              redeem_time: "",
+              app_name: "",
+              product_name: "",
+            };
+          }
+        })
+      );
     } else {
       const results = await apiJson("/api/channel1/batch-query", {
         method: "POST",
@@ -1656,6 +1672,21 @@ function formatUserDetails(result) {
     if (value == null || value === "") {
       continue;
     }
+
+    if (key === "current_plan") {
+      lines.push(`${t().labels.product}: ${String(value)}`);
+      continue;
+    }
+
+    if (key === "token_expires") {
+      lines.push(`${t().labels.tokenExpires}: ${String(value)}`);
+      continue;
+    }
+
+    if (key === "channel" || key === "email" || key === "name") {
+      continue;
+    }
+
     lines.push(`${key}: ${String(value)}`);
   }
 
@@ -1780,6 +1811,20 @@ function parseBatchCodes(input) {
     .filter(Boolean);
 }
 
+function parseChannel2BatchCodes(input) {
+  const seen = new Set();
+  return String(input)
+    .split(/[\r\n,]+/)
+    .map((line) => line.trim().toUpperCase())
+    .filter((code) => {
+      if (!code || seen.has(code)) {
+        return false;
+      }
+      seen.add(code);
+      return true;
+    });
+}
+
 function batchStatusLabel(status) {
   if (status === "used") {
     return t().labels.used;
@@ -1844,9 +1889,9 @@ function taskMessageBlock(task) {
 }
 
 function renderThemeIcon() {
-  return state.theme === "purple"
-    ? '<span aria-hidden="true">&#9673;</span>'
-    : '<span aria-hidden="true">&#10022;</span>';
+  return state.theme === "dark"
+    ? '<span aria-hidden="true">&#9790;</span>'
+    : '<span aria-hidden="true">&#9728;</span>';
 }
 
 function renderStatusBadge(label, tone = "neutral") {
@@ -2021,13 +2066,13 @@ function getStoredLanguage() {
 
 function getStoredTheme() {
   const stored = localStorage.getItem(STORAGE_THEME_KEY);
-  if (stored === "dark" || stored === "purple") {
+  if (stored === "dark" || stored === "light") {
     return stored;
   }
-  if (stored === "light") {
-    return "purple";
+  if (stored === "purple") {
+    return "dark";
   }
-  return "dark";
+  return "light";
 }
 
 function t() {
@@ -2125,6 +2170,43 @@ function normalize(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function parseLooseJsonValue(raw) {
+  if (!normalize(raw)) {
+    return null;
+  }
+
+  let parsed = raw;
+
+  for (let attempts = 0; attempts < 3; attempts += 1) {
+    if (typeof parsed !== "string") {
+      break;
+    }
+
+    const trimmed = parsed.trim();
+    if (!trimmed) {
+      break;
+    }
+
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  return parsed && typeof parsed === "object" ? parsed : null;
+}
+
+function getAuthSessionPlanType(raw) {
+  const parsed = parseLooseJsonValue(raw);
+  if (!parsed) {
+    return "";
+  }
+
+  const accountObject = parsed.account && typeof parsed.account === "object" ? parsed.account : {};
+  return normalize(accountObject.planType || parsed.planType || parsed.current_plan).toLowerCase();
+}
+
 function normalizeError(error, fallback) {
   return error instanceof Error && normalize(error.message) ? error.message.trim() : fallback;
 }
@@ -2146,26 +2228,19 @@ function channelLabel(channel) {
   return channel === "channel2" ? t().labels.channel2 : t().labels.channel1;
 }
 
-function createRequestSign() {
-  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
 function decodeLooseText(text) {
   return normalize(text);
 }
 
 function normalizeVerifiedCdk(result, code, channel = "channel1") {
   if (channel === "channel2") {
+    const product = [normalize(result?.plan), normalize(result?.term)].filter(Boolean).join(" / ");
     return {
       code,
       channel,
-      app_name: t().labels.channel2,
-      app_product_name: PRODUCT_ID,
-      raw: result?.data ?? result,
+      app_name: normalize(result?.service) || "chatgpt",
+      app_product_name: product || PRODUCT_ID,
+      raw: result,
     };
   }
 
@@ -2206,8 +2281,21 @@ function parseAuthSessionChannel2(raw) {
     throw new Error(t().messages.authParseFailed);
   }
 
+  if (!normalize(parsed.accessToken)) {
+    throw new Error(t().messages.authInvalid);
+  }
+
   const userObject = parsed.user && typeof parsed.user === "object" ? parsed.user : {};
+  const accountObject = parsed.account && typeof parsed.account === "object" ? parsed.account : {};
   const account = normalize(userObject.email) || normalize(parsed.email);
+  const name = normalize(userObject.name) || normalize(parsed.name);
+  const structure = normalize(accountObject.structure).toLowerCase();
+  const currentPlan = normalize(accountObject.planType) || "free";
+  const expires = normalize(parsed.expires);
+
+  if (structure === "workspace") {
+    throw new Error(t().messages.authInvalid);
+  }
 
   if (!account || !account.includes("@")) {
     throw new Error(t().messages.authEmailMissing);
@@ -2218,27 +2306,130 @@ function parseAuthSessionChannel2(raw) {
     email: account,
   };
 
+  if (name) {
+    extra.name = name;
+  }
+
+  if (currentPlan) {
+    extra.current_plan = currentPlan;
+  }
+
+  if (expires) {
+    extra.token_expires = expires;
+  }
+
   return {
     verified: true,
     user: account,
     email: account,
-    has_sub: Boolean(parsed.account_ordering),
+    name,
+    has_sub: currentPlan !== "free" || Boolean(parsed.account_ordering),
     extra,
   };
 }
 
-function normalizeChannel2BatchStatus(status) {
+function normalizeChannel2Activation(raw, code) {
+  const status = normalize(raw?.status).toLowerCase();
+  const pending = status !== "activated" && status !== "error";
+  const success = status === "activated";
+  const message = normalize(raw?.message) || normalize(raw?.error) || status || t().labels.pending;
+
+  return {
+    task_id: code,
+    cdk: normalize(raw?.code) || code,
+    status: status || "activating",
+    progress: success ? 100 : pending ? 65 : 100,
+    pending,
+    success,
+    error: success ? "" : message,
+    message,
+    activated_email: normalize(raw?.activated_email),
+    name: normalize(raw?.name),
+    service: normalize(raw?.service),
+    plan: normalize(raw?.plan),
+    term: normalize(raw?.term),
+    expires: normalize(raw?.expires),
+  };
+}
+
+function normalizeChannel2BulkStatus(status) {
   const normalized = normalize(status).toLowerCase();
 
-  if (normalized === "used") {
-    return "used";
-  }
-
-  if (normalized === "not_used" || normalized === "unused") {
+  if (normalized === "available") {
     return "unused";
   }
 
+  if (normalized === "activated" || normalized === "used" || normalized === "error") {
+    return "used";
+  }
+
   return "invalid";
+}
+
+function normalizeChannel2SingleStatus(status) {
+  const normalized = normalize(status).toLowerCase();
+
+  if (normalized === "available") {
+    return "unused";
+  }
+
+  if (normalized === "activated") {
+    return "used";
+  }
+
+  return "invalid";
+}
+
+function buildChannel2BatchResults(codes, payload) {
+  const foundList = Array.isArray(payload?.found) ? payload.found : [];
+  const notFoundList = Array.isArray(payload?.not_found) ? payload.not_found : [];
+  const foundMap = new Map();
+
+  foundList.forEach((item) => {
+    const code = normalize(item?.code).toUpperCase();
+    if (!code) {
+      return;
+    }
+
+    foundMap.set(code, {
+      code,
+      status: normalizeChannel2BulkStatus(item?.status),
+      user: "",
+      redeem_time: "",
+      app_name: normalize(item?.service) || "chatgpt",
+      product_name: [normalize(item?.plan), normalize(item?.term)].filter(Boolean).join(" / "),
+      status_raw: normalize(item?.status) || "unknown",
+    });
+  });
+
+  notFoundList.forEach((value) => {
+    const code = normalize(value).toUpperCase();
+    if (!code || foundMap.has(code)) {
+      return;
+    }
+
+    foundMap.set(code, {
+      code,
+      status: "invalid",
+      user: "",
+      redeem_time: "",
+      app_name: "",
+      product_name: "",
+      status_raw: "not_found",
+    });
+  });
+
+  return codes.map((code) =>
+    foundMap.get(code) || {
+      code,
+      status: "invalid",
+      user: "",
+      redeem_time: "",
+      app_name: "",
+      product_name: "",
+      status_raw: "not_found",
+    }
+  );
 }
 
 async function apiChannel2Json(path, options = {}) {
@@ -2275,17 +2466,18 @@ async function apiChannel2Json(path, options = {}) {
 }
 
 async function checkChannel2Cdk(code) {
-  const result = await apiChannel2Json("/api/channel2/check", {
-    method: "POST",
-    body: JSON.stringify({
-      cdk: code,
-      sign: createRequestSign(),
-      timestamp: Date.now(),
-    }),
+  const result = await apiChannel2Json(`/api/channel2/check-cdk/${encodeURIComponent(code)}`, {
+    method: "GET",
   });
 
-  if (Number(result?.code) !== 1) {
-    throw new Error(decodeLooseText(result?.message) || t().messages.cdkInvalid);
+  const status = normalize(result?.status).toLowerCase();
+
+  if (status === "activated") {
+    throw new Error(t().messages.cdkUsed);
+  }
+
+  if (normalize(result?.error)) {
+    throw new Error(decodeLooseText(result.error) || t().messages.cdkInvalid);
   }
 
   return result;
@@ -2349,37 +2541,154 @@ async function startRedeemChannel2() {
     const result = await apiChannel2Json("/api/channel2/redeem", {
       method: "POST",
       body: JSON.stringify({
-        cdk,
-        account: authRaw,
-        type: "gpt",
-        sign: createRequestSign(),
-        timestamp: Date.now(),
+        code: cdk,
+        session: authRaw,
       }),
     });
 
-    if (Number(result?.code) !== 1) {
+    const initialStatus = normalize(result?.status).toLowerCase();
+
+    if (normalize(result?.error)) {
+      throw new Error(decodeLooseText(result.error) || t().messages.channel2Failed);
+    }
+
+    if (initialStatus === "error") {
       throw new Error(decodeLooseText(result?.message) || t().messages.channel2Failed);
     }
 
-    state.redeem.redeeming = false;
-    state.redeem.task = null;
+    state.redeem.task = normalizeChannel2Activation(
+      {
+        ...result,
+        code: result?.code || cdk,
+        status: initialStatus || "activating",
+        activated_email: verifiedUser.email,
+        name: verifiedUser.name,
+        service: state.redeem.verifiedCdk?.app_name,
+        plan: state.redeem.verifiedCdk?.raw?.plan,
+        term: state.redeem.verifiedCdk?.raw?.term,
+      },
+      cdk
+    );
     render();
 
-    const details = [t().messages.channel2Success];
-    const message = decodeLooseText(result?.message);
-    if (message) {
-      details.push(message);
+    if (initialStatus === "activated") {
+      state.redeem.redeeming = false;
+      render();
+      showModal(
+        "success",
+        t().labels.success,
+        [
+          channelLabel("channel2"),
+          `${t().labels.email}: ${state.redeem.task.activated_email || verifiedUser.email}`,
+          state.redeem.task.name ? `${t().labels.user}: ${state.redeem.task.name}` : "",
+          state.redeem.task.service ? `${t().labels.app}: ${state.redeem.task.service}` : "",
+          state.redeem.task.plan || state.redeem.task.term
+            ? `${t().labels.product}: ${[state.redeem.task.plan, state.redeem.task.term].filter(Boolean).join(" / ")}`
+            : "",
+          t().messages.channel2Success,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+        null,
+        { fireworks: true }
+      );
+      return;
     }
-    details.unshift(`${t().labels.email}: ${verifiedUser.email}`);
-    details.unshift(channelLabel("channel2"));
 
-    showModal("success", t().labels.success, details.join("\n\n"), null, {
-      fireworks: true,
-    });
+    updateModalMessage(
+      [
+        channelLabel("channel2"),
+        `${t().labels.email}: ${verifiedUser.email}`,
+        `${t().labels.taskStatus}: ${t().labels.pending}`,
+        `${t().labels.progress}: 65%`,
+      ].join("\n\n"),
+      t().labels.redeeming
+    );
+
+    await pollChannel2Activation(cdk, verifiedUser);
   } catch (error) {
     state.redeem.redeeming = false;
     render();
     showModal("error", t().labels.failure, normalizeError(error, t().messages.channel2Failed));
+  }
+}
+
+async function pollChannel2Activation(code, verifiedUser) {
+  while (state.redeem.redeeming && state.redeem.validatedChannel === "channel2") {
+    let activation;
+
+    try {
+      const raw = await apiChannel2Json(`/api/channel2/activation/${encodeURIComponent(code)}`, {
+        method: "GET",
+      });
+      activation = normalizeChannel2Activation(raw, code);
+    } catch (_error) {
+      await delay(CHANNEL2_POLL_INTERVAL_MS);
+      continue;
+    }
+
+    state.redeem.task = activation;
+    render();
+
+    const messageLines = [
+      channelLabel("channel2"),
+      `${t().labels.email}: ${activation.activated_email || verifiedUser.email}`,
+      `${t().labels.taskStatus}: ${activation.success ? t().labels.success : activation.pending ? t().labels.pending : t().labels.failure}`,
+      `${t().labels.progress}: ${clampProgress(activation.progress)}%`,
+      `${t().labels.message}: ${activation.message || "-"}`,
+    ];
+
+    if (activation.plan || activation.term) {
+      messageLines.push(
+        `${t().labels.product}: ${[activation.plan, activation.term].filter(Boolean).join(" / ") || "-"}`
+      );
+    }
+
+    updateModalMessage(messageLines.join("\n\n"), t().labels.redeeming);
+
+    if (activation.pending) {
+      await delay(CHANNEL2_POLL_INTERVAL_MS);
+      continue;
+    }
+
+    state.redeem.redeeming = false;
+    render();
+
+    if (activation.success) {
+      const details = [
+        channelLabel("channel2"),
+        `${t().labels.email}: ${activation.activated_email || verifiedUser.email}`,
+      ];
+
+      if (activation.name) {
+        details.push(`${t().labels.user}: ${activation.name}`);
+      }
+
+      if (activation.service) {
+        details.push(`${t().labels.app}: ${activation.service}`);
+      }
+
+      if (activation.plan || activation.term) {
+        details.push(`${t().labels.product}: ${[activation.plan, activation.term].filter(Boolean).join(" / ")}`);
+      }
+
+      details.push(t().messages.channel2Success);
+
+      showModal("success", t().labels.success, details.join("\n\n"), null, {
+        fireworks: true,
+      });
+    } else {
+      showModal(
+        "error",
+        t().labels.failure,
+        [
+          channelLabel("channel2"),
+          `${t().labels.email}: ${activation.activated_email || verifiedUser.email}`,
+          activation.message || t().messages.channel2Failed,
+        ].join("\n\n")
+      );
+    }
+    return;
   }
 }
 

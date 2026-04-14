@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Key Checker · Doremon Store</title>
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <link
+      rel="stylesheet"
+      href="/shop/assets/vendor/fontawesome/all.min.css?v=usdt-v14-1776171564944490491-fa1"
+    />
+    <link
+      rel="stylesheet"
+      href="/shop/assets/store-core.css?v=usdt-v14-1776171564944490491"
+    />
+    <link
+      rel="stylesheet"
+      href="/shop/assets/store-activate.css?v=usdt-v14-1776171564944490491"
+    />
+    <link
+      rel="stylesheet"
+      href="/shop/assets/store-activate-polish.css?v=usdt-v14-1776171564944490491"
+    />
+    <link
+      rel="stylesheet"
+      href="/shop/assets/store-check.css?v=usdt-v14-1776171564944490491"
+    />
+  </head>
+  <body
+    data-page="check"
+    data-brand-name="Doremon Store"
+    data-support-url="https://t.me/vangiangnguyenn"
+    data-home-url="/"
+    data-lang="vi"
+  >
+    <header class="activate-topbar">
+      <div class="activate-topbar__inner">
+        <a
+          class="activate-brand"
+          href="/"
+          aria-label="Doremon Store"
+        >
+          <span class="activate-brand__mark"><i class="fas fa-bolt"></i></span>
+          <span class="activate-brand__copy">
+            <strong>Doremon Store</strong>
+            <span id="checkBrandSub">CDK key checker</span>
+          </span>
+        </a>
+
+        <div class="activate-topbar__actions">
+          <a
+            class="activate-topbar__link"
+            href="/"
+            id="checkHomeLink"
+          >
+            <i class="fas fa-house"></i>
+            <span>Home</span>
+          </a>
+          <a
+            class="activate-topbar__link activate-topbar__link--accent"
+            href="https://t.me/vangiangnguyenn"
+            target="_blank"
+            rel="noopener"
+            id="checkSupportLink"
+          >
+            <i class="fas fa-circle-question"></i>
+            <span>Support</span>
+          </a>
+          <button class="activate-topbar__lang" type="button" id="checkLangBtn">
+            EN
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="activate-page check-page">
+      <section class="activate-hero check-hero">
+        <h1 id="checkPageTitle">Key Checker</h1>
+        <p id="checkPageLead">Check the status of multiple CDK keys at once.</p>
+      </section>
+
+      <section class="activate-card check-card">
+        <div class="activate-card__body check-card__body">
+          <div class="activate-alert" id="checkAlert" hidden></div>
+
+          <section class="activate-panel check-panel">
+            <div class="activate-panel__copy">
+              <h2 id="checkPanelTitle">Key Checker</h2>
+              <p id="checkPanelLead">Paste keys below, one per line.</p>
+            </div>
+
+            <div class="activate-fieldset">
+              <div class="check-field-head">
+                <label
+                  class="activate-field-label"
+                  for="checkCodesInput"
+                  id="checkCodesLabel"
+                  >Keys</label
+                >
+                <span class="check-count" id="checkCodesCount">0</span>
+              </div>
+              <textarea
+                id="checkCodesInput"
+                class="activate-textarea check-textarea"
+                spellcheck="false"
+                autocomplete="off"
+                placeholder="DEMO0000000000000000000000000001&#10;DEMO0000000000000000000000000002&#10;DEMO0000000000000000000000000003"
+              ></textarea>
+            </div>
+
+            <button
+              class="activate-primary-btn check-submit-btn"
+              type="button"
+              id="checkSubmitBtn"
+            >
+              <i class="fas fa-magnifying-glass"></i>
+              <span id="checkSubmitBtnText">Check keys</span>
+            </button>
+
+            <div class="activate-note check-note">
+              <i class="fas fa-circle-info"></i>
+              <p id="checkNoteText">
+                Each line should contain one CDK. All checks run through our
+                Doremon storefront API.
+              </p>
+            </div>
+
+            <div
+              class="activate-actions-row activate-actions-row--inline check-links-row"
+            >
+              <a
+                class="activate-secondary-btn"
+                href="/shop/activate"
+                id="checkRedeemLink"
+              >
+                <span id="checkRedeemText">Go to redeem page</span>
+                <i class="fas fa-bolt"></i>
+              </a>
+              <a
+                class="activate-secondary-btn"
+                href="/shop/docs/cdk-activation-api"
+                target="_blank"
+                rel="noopener"
+                id="checkApiDocsLink"
+              >
+                <span id="checkApiDocsText">Integration API docs</span>
+                <i class="fas fa-book-open"></i>
+              </a>
+            </div>
+
+            <section
+              class="check-results-section"
+              id="checkResultsSection"
+              hidden
+            >
+              <div class="check-summary-grid" id="checkSummaryGrid">
+                <article class="check-summary-card">
+                  <strong id="checkTotalValue">0</strong>
+                  <span id="checkTotalLabel">Total</span>
+                </article>
+                <article
+                  class="check-summary-card check-summary-card--available"
+                >
+                  <strong id="checkAvailableValue">0</strong>
+                  <span id="checkAvailableLabel">Available</span>
+                </article>
+                <article
+                  class="check-summary-card check-summary-card--activated"
+                >
+                  <strong id="checkActivatedValue">0</strong>
+                  <span id="checkActivatedLabel">Activated</span>
+                </article>
+                <article class="check-summary-card check-summary-card--missing">
+                  <strong id="checkNotFoundValue">0</strong>
+                  <span id="checkNotFoundLabel">Not found</span>
+                </article>
+              </div>
+
+              <button
+                class="activate-ghost-btn check-copy-btn"
+                type="button"
+                id="checkCopyAvailableBtn"
+                hidden
+              >
+                <i class="fas fa-copy"></i>
+                <span id="checkCopyAvailableText">Copy available keys</span>
+              </button>
+
+              <div class="check-results-list" id="checkResultsList"></div>
+            </section>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script src="/shop/assets/store-check.js?v=usdt-v14-1776171564944490491"></script>
+  <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9ec40a393c4a0387',t:'MTc3NjE4MzY0OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>

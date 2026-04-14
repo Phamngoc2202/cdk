@@ -6,7 +6,7 @@ const port = Number(process.env.PORT) || 3000;
 const publicDir = path.join(__dirname, "public");
 const indexFile = path.join(publicDir, "index.html");
 const CHANNEL1_BASE = "https://receipt-api.nitro.xin";
-const CHANNEL2_BASE = "https://chong.databrain.sbs";
+const CHANNEL2_BASE = "https://doremon.me/shop/api/activate/chatgpt";
 const PRODUCT_ID = "chatgpt";
 
 app.disable("x-powered-by");
@@ -83,18 +83,26 @@ app.post("/api/channel1/batch-query", async (req, res) => {
   await proxyText(res, `${CHANNEL1_BASE}/cdks/public/check-usage2`, codes.map((code) => encodeURIComponent(String(code))).join("\n"));
 });
 
-app.post("/api/channel2/check", async (req, res) => {
-  const { cdk, sign, timestamp } = req.body || {};
-  await proxyJson(res, `${CHANNEL2_BASE}/api/vip/c`, { cdk, sign, timestamp });
+app.get("/api/channel2/check-cdk/:code", async (req, res) => {
+  await proxyResponse(res, `${CHANNEL2_BASE}/keys/${encodeURIComponent(req.params.code || "")}`, {
+    method: "GET",
+  });
 });
 
 app.post("/api/channel2/redeem", async (req, res) => {
-  const { cdk, account, type, sign, timestamp } = req.body || {};
-  await proxyJson(res, `${CHANNEL2_BASE}/api/vip/r`, { cdk, account, type, sign, timestamp });
+  const { code, session } = req.body || {};
+  await proxyJson(res, `${CHANNEL2_BASE}/keys/activate-session`, { code, session });
 });
 
-app.post("/api/channel2/cdks", async (req, res) => {
-  await proxyJson(res, `${CHANNEL2_BASE}/api/vip/cdks`, req.body || []);
+app.get("/api/channel2/activation/:code", async (req, res) => {
+  await proxyResponse(res, `${CHANNEL2_BASE}/keys/${encodeURIComponent(req.params.code || "")}/activation`, {
+    method: "GET",
+  });
+});
+
+app.post("/api/channel2/bulk-status", async (req, res) => {
+  const codes = Array.isArray(req.body?.codes) ? req.body.codes : [];
+  await proxyJson(res, `${CHANNEL2_BASE}/keys/bulk-status`, { codes });
 });
 
 app.use(express.static(publicDir));
