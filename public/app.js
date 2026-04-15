@@ -908,7 +908,6 @@ function renderRedeemSection() {
             ${renderInlineStatus(authStatus, state.redeem.authLoading && !isChannel2, t().labels.checking)}
           </div>
           <div class="submit-inline">
-            <div class="helper-text">${escapeHtml(t().notes.polling)}</div>
             <button
               type="button"
               class="button-primary launch-button ${isChannel2 ? "launch-button--channel2" : ""}"
@@ -923,6 +922,7 @@ function renderRedeemSection() {
                     : t().buttons.redeemCh1
               )}
             </button>
+            <div class="helper-text submit-note">${escapeHtml(t().notes.polling)}</div>
           </div>
         </div>
       </article>
