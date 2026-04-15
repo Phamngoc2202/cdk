@@ -1,2 +1,5 @@
 node_modules
 .env
+_tmp_*
+_server_out.txt
+_server_err.txt
