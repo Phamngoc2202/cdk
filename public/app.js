@@ -2227,6 +2227,8 @@ function sanitizeChannel2ErrorMessage(message, fallback) {
     lowered.includes("cf_chl_") ||
     lowered.includes("challenge-platform") ||
     lowered.includes("attention required") ||
+    lowered.includes("cloudflare challenge") ||
+    lowered.includes("upstream blocked by cloudflare") ||
     lowered.includes("channel2_upstream_blocked")
   ) {
     return t().messages.channel2Unavailable || fallback;

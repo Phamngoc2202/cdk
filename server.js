@@ -44,6 +44,7 @@ async function proxyResponse(res, url, options = {}, meta = {}) {
     if (meta.normalizeCloudflareChallenge && isCloudflareChallenge(response.status, text)) {
       res.status(503).json({
         code: "channel2_upstream_blocked",
+        error: "channel2_upstream_blocked",
         message: "Channel 2 upstream blocked by Cloudflare challenge",
         data: null,
       });
