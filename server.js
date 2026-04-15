@@ -36,10 +36,6 @@ function createLegacyFetchResponse(res, bodyBuffer) {
 }
 
 async function fetchCompat(url, options = {}) {
-  if (typeof globalThis.fetch === "function") {
-    return globalThis.fetch(url, options);
-  }
-
   return new Promise((resolve, reject) => {
     const target = new URL(url);
     const client = target.protocol === "http:" ? http : https;
