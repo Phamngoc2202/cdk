@@ -100,6 +100,11 @@ app.get("/api/channel2/activation/:code", async (req, res) => {
   });
 });
 
+app.post("/api/channel2/bulk-status", async (req, res) => {
+  const codes = Array.isArray(req.body?.codes) ? req.body.codes : [];
+  await proxyJson(res, `${CHANNEL2_BASE}/keys/bulk-status`, { codes });
+});
+
 app.use(express.static(publicDir));
 
 app.use((_req, res) => {

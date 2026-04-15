@@ -928,18 +928,42 @@ function renderRedeemSection() {
       </article>
     </div>
 
-    ${renderVerifiedPanels()}
+    ${renderVerifiedPanels(getRedeemUserSnapshot())}
   `;
 }
 
-function renderVerifiedPanels() {
-  if (!state.redeem.task) {
+function renderVerifiedPanels(activeUser = getRedeemUserSnapshot()) {
+  const blocks = [];
+
+  if (state.redeem.verifiedCdk && activeUser) {
+    const currentPlan = normalize(activeUser?.extra?.current_plan);
+    const tokenExpires = normalize(activeUser?.extra?.token_expires);
+
+    blocks.push(`
+      <section class="summary-card">
+        <div class="summary-head">
+          <h3>${escapeHtml(state.language === "vi" ? "Xác nhận trước khi kích hoạt" : state.language === "ur" ? "ایکٹیویٹ کرنے سے پہلے تصدیق" : "Confirm Before Activation")}</h3>
+          ${renderStatusBadge(t().labels.ready, "success")}
+        </div>
+        <div class="info-grid">
+          <div class="task-kv"><strong>${escapeHtml(t().labels.email)}</strong><span>${escapeHtml(activeUser.email || "-")}</span></div>
+          <div class="task-kv"><strong>${escapeHtml(t().labels.cdk)}</strong><span>${escapeHtml(state.redeem.verifiedCdk.code || "-")}</span></div>
+          <div class="task-kv"><strong>${escapeHtml(t().labels.app)}</strong><span>${escapeHtml(state.redeem.verifiedCdk.app_name || "-")}</span></div>
+          <div class="task-kv"><strong>${escapeHtml(t().labels.product)}</strong><span>${escapeHtml(state.redeem.verifiedCdk.app_product_name || "-")}</span></div>
+          <div class="task-kv"><strong>${escapeHtml(state.language === "vi" ? "Gói hiện tại" : state.language === "ur" ? "موجودہ پلان" : "Current Plan")}</strong><span>${escapeHtml(currentPlan || "-")}</span></div>
+          <div class="task-kv"><strong>${escapeHtml(t().labels.tokenExpires)}</strong><span>${escapeHtml(tokenExpires || "-")}</span></div>
+        </div>
+      </section>
+    `);
+  }
+
+  if (!state.redeem.task && !blocks.length) {
     return "";
   }
 
-  return `
-    <div class="summary-grid summary-grid--single">
-      <section class="summary-card">
+  if (state.redeem.task) {
+    blocks.push(`
+      <section class="summary-card ${blocks.length ? "" : "summary-card--task"}">
         <div class="summary-head">
           <h3>${escapeHtml(t().labels.currentTask)}</h3>
           ${renderStatusBadge(taskStatusLabel(state.redeem.task), taskTone(state.redeem.task))}
@@ -947,8 +971,10 @@ function renderVerifiedPanels() {
         ${renderTaskSummary(state.redeem.task)}
         <div class="helper-text">${escapeHtml(t().notes.polling)}</div>
       </section>
-    </div>
-  `;
+    `);
+  }
+
+  return `<div class="summary-grid ${blocks.length === 1 ? "summary-grid--single" : ""}">${blocks.join("")}</div>`;
 }
 
 function renderTaskLookupSection() {
@@ -1355,12 +1381,12 @@ async function startRedeem(channel = "channel1") {
     return;
   }
 
-  showLoadingModal(t().labels.redeeming, `${channelLabel(channel)}\n${t().labels.checking}`);
-
   if (channel === "channel2") {
     await startRedeemChannel2();
     return;
   }
+
+  showLoadingModal(t().labels.redeeming, `${channelLabel(channel)}\n${t().labels.checking}`);
 
   const authOk = await validateAuthSession({ silent: true });
   if (!authOk) {
@@ -1498,42 +1524,11 @@ async function queryBatch(channel = "channel1") {
 
   try {
     if (channel === "channel2") {
-      state.batch.results = await Promise.all(
-        codes.map(async (code) => {
-          try {
-            const item = await checkChannel2Cdk(code);
-            return {
-              code,
-              status: normalizeChannel2SingleStatus(item?.status),
-              user: "",
-              redeem_time: "",
-              app_name: "",
-              product_name: "",
-            };
-          } catch (error) {
-            const message = normalizeError(error, "");
-            if (message === t().messages.cdkUsed) {
-              return {
-                code,
-                status: "used",
-                user: "",
-                redeem_time: "",
-                app_name: "",
-                product_name: "",
-              };
-            }
-
-            return {
-              code,
-              status: "invalid",
-              user: "",
-              redeem_time: "",
-              app_name: "",
-              product_name: "",
-            };
-          }
-        })
-      );
+      const payload = await apiChannel2Json("/api/channel2/bulk-status", {
+        method: "POST",
+        body: JSON.stringify({ codes }),
+      });
+      state.batch.results = buildChannel2BatchResults(codes, payload);
     } else {
       const results = await apiJson("/api/channel1/batch-query", {
         method: "POST",
@@ -2402,7 +2397,7 @@ function normalizeChannel2SingleStatus(status) {
     return "unused";
   }
 
-  if (normalized === "activated") {
+  if (normalized === "activated" || normalized === "used" || normalized === "error") {
     return "used";
   }
 
@@ -2500,10 +2495,19 @@ async function checkChannel2Cdk(code) {
     method: "GET",
   });
 
-  const status = normalize(result?.status).toLowerCase();
+  const normalizedStatus = normalizeChannel2SingleStatus(result?.status);
+  const service = normalize(result?.service).toLowerCase();
 
-  if (status === "activated") {
+  if (normalizedStatus === "used") {
     throw new Error(t().messages.cdkUsed);
+  }
+
+  if (normalizedStatus === "invalid") {
+    throw new Error(t().messages.cdkInvalid);
+  }
+
+  if (service && service !== PRODUCT_ID) {
+    throw new Error(t().messages.cdkInvalid);
   }
 
   if (normalize(result?.error)) {
@@ -2555,16 +2559,53 @@ async function startRedeemChannel2() {
   state.redeem.verifiedUser = verifiedUser;
   state.redeem.validatedAuthValue = authRaw;
   state.redeem.authStatus = statusSuccess(`${t().labels.email}: ${verifiedUser.email}`);
-  state.redeem.redeeming = true;
   state.redeem.validatedChannel = "channel2";
   render();
-  updateModalMessage(
+
+  const channel2Plan = normalize(state.redeem.verifiedCdk?.raw?.plan);
+  const channel2Term = normalize(state.redeem.verifiedCdk?.raw?.term);
+  const confirmLines = [
+    channelLabel("channel2"),
+    `${t().labels.email}: ${verifiedUser.email}`,
+    verifiedUser.name ? `${t().labels.user}: ${verifiedUser.name}` : "",
+    `${state.language === "vi" ? "Gói hiện tại" : state.language === "ur" ? "موجودہ پلان" : "Current Plan"}: ${normalize(verifiedUser?.extra?.current_plan) || "free"}`,
+    `${t().labels.cdk}: ${cdk}`,
+    `${state.language === "vi" ? "Dịch vụ" : state.language === "ur" ? "سروس" : "Service"}: ${state.redeem.verifiedCdk?.app_name || "chatgpt"}`,
+    `${state.language === "vi" ? "Gói kích hoạt" : state.language === "ur" ? "ایکٹیویشن پلان" : "Activation Plan"}: ${channel2Plan || "-"}`,
+    `${state.language === "vi" ? "Thời hạn gói" : state.language === "ur" ? "مدت" : "Term"}: ${channel2Term || "-"}`,
+    `${t().labels.tokenExpires}: ${normalize(verifiedUser?.extra?.token_expires) || "-"}`,
+    state.language === "vi"
+      ? "Nhấn OK để bắt đầu kích hoạt."
+      : state.language === "ur"
+        ? "ایکٹیویشن شروع کرنے کے لیے OK دبائیں۔"
+        : "Press OK to start activation.",
+  ];
+
+  showModal(
+    "info",
+    state.language === "vi" ? "Xác nhận tài khoản đích" : state.language === "ur" ? "ہدف اکاؤنٹ کی تصدیق" : "Confirm Target Account",
+    confirmLines.filter(Boolean).join("\n\n"),
+    () => {
+      void beginChannel2Activation({ cdk, authRaw, verifiedUser });
+    }
+  );
+}
+
+async function beginChannel2Activation({ cdk, authRaw, verifiedUser }) {
+  if (state.redeem.redeeming) {
+    return;
+  }
+
+  state.redeem.redeeming = true;
+  render();
+
+  showLoadingModal(
+    t().labels.redeeming,
     [
       channelLabel("channel2"),
       `${t().labels.email}: ${verifiedUser.email}`,
       t().labels.redeeming,
-    ].join("\n\n"),
-    t().labels.redeeming
+    ].join("\n\n")
   );
 
   try {
