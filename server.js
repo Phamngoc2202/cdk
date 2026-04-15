@@ -1,5 +1,7 @@
 const express = require("express");
 const path = require("path");
+const http = require("http");
+const https = require("https");
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -14,6 +16,58 @@ const FALLBACK_USER_AGENT =
 
 app.disable("x-powered-by");
 app.use(express.json({ limit: "2mb" }));
+
+function createLegacyFetchResponse(res, bodyBuffer) {
+  return {
+    status: res.statusCode || 500,
+    headers: {
+      get(name) {
+        const value = res.headers[String(name).toLowerCase()];
+        if (Array.isArray(value)) {
+          return value.join(", ");
+        }
+        return value || null;
+      },
+    },
+    async text() {
+      return bodyBuffer.toString("utf8");
+    },
+  };
+}
+
+async function fetchCompat(url, options = {}) {
+  if (typeof globalThis.fetch === "function") {
+    return globalThis.fetch(url, options);
+  }
+
+  return new Promise((resolve, reject) => {
+    const target = new URL(url);
+    const client = target.protocol === "http:" ? http : https;
+
+    const req = client.request(
+      target,
+      {
+        method: options.method || "GET",
+        headers: options.headers || {},
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+        res.on("end", () => {
+          resolve(createLegacyFetchResponse(res, Buffer.concat(chunks)));
+        });
+      }
+    );
+
+    req.on("error", reject);
+
+    if (options.body != null) {
+      req.write(options.body);
+    }
+
+    req.end();
+  });
+}
 
 function isCloudflareChallenge(statusCode, body) {
   if (statusCode !== 403) {
@@ -72,7 +126,7 @@ function setProxyResult(res, response, text) {
 
 async function proxyResponse(res, url, options = {}, meta = {}) {
   try {
-    const response = await fetch(url, options);
+    const response = await fetchCompat(url, options);
     const text = await response.text();
 
     if (meta.normalizeCloudflareChallenge && isCloudflareChallenge(response.status, text)) {
@@ -109,7 +163,7 @@ async function proxyChannel2WithFallback(req, res, requestPath, options = {}) {
     const headers = getChannel2Headers(req, base, extraHeaders);
 
     try {
-      const response = await fetch(targetUrl, {
+      const response = await fetchCompat(targetUrl, {
         method,
         headers,
         body,
