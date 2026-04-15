@@ -8,14 +8,48 @@ const indexFile = path.join(publicDir, "index.html");
 const CHANNEL1_BASE = "https://receipt-api.nitro.xin";
 const CHANNEL2_BASE = "https://doremon.me/shop/api/activate/chatgpt";
 const PRODUCT_ID = "chatgpt";
+const FALLBACK_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 
 app.disable("x-powered-by");
 app.use(express.json({ limit: "2mb" }));
 
-async function proxyResponse(res, url, options = {}) {
+function isCloudflareChallenge(statusCode, body) {
+  if (statusCode !== 403) {
+    return false;
+  }
+
+  const lowered = String(body || "").toLowerCase();
+  return lowered.includes("just a moment") || lowered.includes("__cf_chl_") || lowered.includes("challenge-platform");
+}
+
+function getChannel2Headers(req, extraHeaders = {}) {
+  const headers = {
+    Accept: "application/json, text/plain, */*",
+    "Accept-Language": req.get("accept-language") || "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+    "User-Agent": req.get("user-agent") || FALLBACK_USER_AGENT,
+    Referer: "https://doremon.me/",
+    Origin: "https://doremon.me",
+    ...extraHeaders,
+  };
+
+  return headers;
+}
+
+async function proxyResponse(res, url, options = {}, meta = {}) {
   try {
     const response = await fetch(url, options);
     const text = await response.text();
+
+    if (meta.normalizeCloudflareChallenge && isCloudflareChallenge(response.status, text)) {
+      res.status(503).json({
+        code: "channel2_upstream_blocked",
+        message: "Channel 2 upstream blocked by Cloudflare challenge",
+        data: null,
+      });
+      return;
+    }
+
     const contentType = response.headers.get("content-type") || "application/json; charset=utf-8";
 
     res.status(response.status);
@@ -84,25 +118,59 @@ app.post("/api/channel1/batch-query", async (req, res) => {
 });
 
 app.get("/api/channel2/check-cdk/:code", async (req, res) => {
-  await proxyResponse(res, `${CHANNEL2_BASE}/keys/${encodeURIComponent(req.params.code || "")}`, {
-    method: "GET",
-  });
+  await proxyResponse(
+    res,
+    `${CHANNEL2_BASE}/keys/${encodeURIComponent(req.params.code || "")}`,
+    {
+      method: "GET",
+      headers: getChannel2Headers(req),
+    },
+    { normalizeCloudflareChallenge: true }
+  );
 });
 
 app.post("/api/channel2/redeem", async (req, res) => {
   const { code, session } = req.body || {};
-  await proxyJson(res, `${CHANNEL2_BASE}/keys/activate-session`, { code, session });
+  await proxyResponse(
+    res,
+    `${CHANNEL2_BASE}/keys/activate-session`,
+    {
+      method: "POST",
+      headers: getChannel2Headers(req, {
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify({ code, session }),
+    },
+    { normalizeCloudflareChallenge: true }
+  );
 });
 
 app.get("/api/channel2/activation/:code", async (req, res) => {
-  await proxyResponse(res, `${CHANNEL2_BASE}/keys/${encodeURIComponent(req.params.code || "")}/activation`, {
-    method: "GET",
-  });
+  await proxyResponse(
+    res,
+    `${CHANNEL2_BASE}/keys/${encodeURIComponent(req.params.code || "")}/activation`,
+    {
+      method: "GET",
+      headers: getChannel2Headers(req),
+    },
+    { normalizeCloudflareChallenge: true }
+  );
 });
 
 app.post("/api/channel2/bulk-status", async (req, res) => {
   const codes = Array.isArray(req.body?.codes) ? req.body.codes : [];
-  await proxyJson(res, `${CHANNEL2_BASE}/keys/bulk-status`, { codes });
+  await proxyResponse(
+    res,
+    `${CHANNEL2_BASE}/keys/bulk-status`,
+    {
+      method: "POST",
+      headers: getChannel2Headers(req, {
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify({ codes }),
+    },
+    { normalizeCloudflareChallenge: true }
+  );
 });
 
 app.use(express.static(publicDir));
