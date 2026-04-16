@@ -8,12 +8,8 @@ const PUBLIC_DIR = path.join(ROOT_DIR, "public");
 const INDEX_FILE = path.join(PUBLIC_DIR, "index.html");
 
 const CHANNEL1_BASE = "https://receipt-api.nitro.xin";
-const CHANNEL2_PRIMARY_BASE = "https://activatecdk.me/shop/api/activate/chatgpt";
-const CHANNEL2_SECONDARY_BASE = "https://doremon.me/shop/api/activate/chatgpt";
 const PRODUCT_ID = "chatgpt";
 const BODY_LIMIT_BYTES = 2 * 1024 * 1024;
-const FALLBACK_USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 
 const CONTENT_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -27,30 +23,6 @@ const CONTENT_TYPES = {
   ".jpeg": "image/jpeg",
   ".ico": "image/x-icon",
 };
-
-function normalizeBaseUrl(base) {
-  const raw = String(base || "").trim();
-  if (!raw) {
-    return "";
-  }
-  return raw.replace(/\/+$/, "");
-}
-
-function getChannel2Bases() {
-  const envPrimary = normalizeBaseUrl(process.env.CHANNEL2_BASE);
-  const envFallback = normalizeBaseUrl(process.env.CHANNEL2_FALLBACK_BASE);
-  const defaults = [CHANNEL2_PRIMARY_BASE, CHANNEL2_SECONDARY_BASE];
-  const list = [envPrimary, envFallback, ...defaults].filter(Boolean);
-  return [...new Set(list)];
-}
-
-function isCloudflareChallenge(status, bodyText) {
-  if (status !== 403) {
-    return false;
-  }
-  const lowered = String(bodyText || "").toLowerCase();
-  return lowered.includes("just a moment") || lowered.includes("__cf_chl_") || lowered.includes("challenge-platform");
-}
 
 function getContentType(filepath) {
   return CONTENT_TYPES[path.extname(filepath).toLowerCase()] || "application/octet-stream";
@@ -158,31 +130,6 @@ function sendUpstream(res, upstream) {
   sendText(res, upstream.status, upstream.bodyText, contentType);
 }
 
-function getChannel2Headers(base, extraHeaders = {}, profile = "minimal") {
-  let origin = "https://activatecdk.me";
-  try {
-    origin = new URL(base).origin;
-  } catch (_error) {
-    origin = "https://activatecdk.me";
-  }
-
-  const headers = {
-    Accept: "application/json, text/plain, */*",
-    "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
-    "User-Agent": FALLBACK_USER_AGENT,
-    "Cache-Control": "no-cache",
-    Pragma: "no-cache",
-    ...extraHeaders,
-  };
-
-  if (profile === "browser") {
-    headers.Origin = origin;
-    headers.Referer = `${origin}/`;
-  }
-
-  return headers;
-}
-
 async function proxyChannel1Json(res, upstreamPath, payload, headers = {}) {
   const upstream = await requestUpstream(`${CHANNEL1_BASE}${upstreamPath}`, {
     method: "POST",
@@ -212,55 +159,6 @@ async function proxyChannel1Get(res, upstreamPath) {
     method: "GET",
   });
   sendUpstream(res, upstream);
-}
-
-async function proxyChannel2WithFallback(req, res, requestPath, options = {}) {
-  const bases = getChannel2Bases();
-  let lastError = null;
-  let blockedByChallenge = false;
-  const headerProfiles = ["minimal", "browser"];
-
-  for (const base of bases) {
-    const targetUrl = `${base}${requestPath}`;
-    for (const profile of headerProfiles) {
-      const headers = getChannel2Headers(base, options.headers || {}, profile);
-
-      try {
-        const upstream = await requestUpstream(targetUrl, {
-          method: options.method || "GET",
-          headers,
-          body: options.body,
-        });
-
-        if (isCloudflareChallenge(upstream.status, upstream.bodyText)) {
-          blockedByChallenge = true;
-          continue;
-        }
-
-        sendUpstream(res, upstream);
-        return;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-  }
-
-  if (blockedByChallenge) {
-    sendJson(res, 503, {
-      code: "channel2_upstream_blocked",
-      error: "channel2_upstream_blocked",
-      message: "Channel 2 upstream blocked by Cloudflare challenge",
-      data: null,
-    });
-    return;
-  }
-
-  sendJson(res, 502, {
-    code: "channel2_proxy_failed",
-    error: "channel2_proxy_failed",
-    message: lastError instanceof Error ? lastError.message : "Channel 2 proxy failed",
-    data: null,
-  });
 }
 
 function matchRoute(pathname, pattern) {
@@ -313,52 +211,6 @@ async function handleApi(req, res, pathname) {
       await proxyChannel1Text(res, "/cdks/public/check-usage2", payload);
       return;
     }
-
-    if (req.method === "GET") {
-      const checkMatch = matchRoute(pathname, /^\/api\/channel2\/check-cdk\/([^/]+)$/);
-      if (checkMatch) {
-        const code = encodeURIComponent(decodeURIComponent(checkMatch[1]));
-        await proxyChannel2WithFallback(req, res, `/keys/${code}`, { method: "GET" });
-        return;
-      }
-    }
-
-    if (req.method === "POST" && pathname === "/api/channel2/redeem") {
-      const body = await parseJsonBody(req);
-      await proxyChannel2WithFallback(req, res, "/keys/activate-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          code: body.code,
-          session: body.session,
-        }),
-      });
-      return;
-    }
-
-    if (req.method === "GET") {
-      const activationMatch = matchRoute(pathname, /^\/api\/channel2\/activation\/([^/]+)$/);
-      if (activationMatch) {
-        const code = encodeURIComponent(decodeURIComponent(activationMatch[1]));
-        await proxyChannel2WithFallback(req, res, `/keys/${code}/activation`, { method: "GET" });
-        return;
-      }
-    }
-
-    if (req.method === "POST" && pathname === "/api/channel2/bulk-status") {
-      const body = await parseJsonBody(req);
-      const codes = Array.isArray(body.codes) ? body.codes : [];
-      await proxyChannel2WithFallback(req, res, "/keys/bulk-status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ codes }),
-      });
-      return;
-    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "api_error";
     sendText(res, 500, message);
@@ -382,8 +234,8 @@ function safePublicPath(pathname) {
 }
 
 function serveIndex(res) {
-  const html = fs.readFileSync(INDEX_FILE);
-  sendBuffer(res, 200, html, "text/html; charset=utf-8");
+  const html = fs.readFileSync(INDEX_FILE, "utf8");
+  sendText(res, 200, html, "text/html; charset=utf-8");
 }
 
 function serveStaticOrIndex(res, pathname) {
