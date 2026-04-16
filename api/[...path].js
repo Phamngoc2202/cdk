@@ -158,19 +158,26 @@ function sendUpstream(res, upstream) {
   sendText(res, upstream.status, upstream.bodyText, contentType);
 }
 
-function getChannel2Headers(req, extraHeaders = {}, profile = "minimal") {
+function getChannel2Headers(base, extraHeaders = {}, profile = "minimal") {
+  let origin = "https://activatecdk.me";
+  try {
+    origin = new URL(base).origin;
+  } catch (_error) {
+    origin = "https://activatecdk.me";
+  }
+
   const headers = {
     Accept: "application/json, text/plain, */*",
-    "Accept-Language": req.headers["accept-language"] || "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
-    "User-Agent": req.headers["user-agent"] || FALLBACK_USER_AGENT,
+    "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+    "User-Agent": FALLBACK_USER_AGENT,
     "Cache-Control": "no-cache",
     Pragma: "no-cache",
     ...extraHeaders,
   };
 
   if (profile === "browser") {
-    headers.Origin = "https://activatecdk.me";
-    headers.Referer = "https://activatecdk.me/";
+    headers.Origin = origin;
+    headers.Referer = `${origin}/`;
   }
 
   return headers;
@@ -216,7 +223,7 @@ async function proxyChannel2WithFallback(req, res, requestPath, options = {}) {
   for (const base of bases) {
     const targetUrl = `${base}${requestPath}`;
     for (const profile of headerProfiles) {
-      const headers = getChannel2Headers(req, options.headers || {}, profile);
+      const headers = getChannel2Headers(base, options.headers || {}, profile);
 
       try {
         const upstream = await requestUpstream(targetUrl, {
