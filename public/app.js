@@ -2,6 +2,12 @@ const PRODUCT_ID = "chatgpt";
 const POLL_INTERVAL_MS = 3000;
 const CHANNEL2_POLL_INTERVAL_MS = 1000;
 const CHANNEL2_DIRECT_BASE = "https://activatecdk.me/shop/api/activate/chatgpt";
+const CHANNEL2_ENDPOINTS = {
+  checkCdk: (code) => `/keys/${encodeURIComponent(code)}`,
+  activateSession: "/keys/activate-session",
+  activation: (code) => `/keys/${encodeURIComponent(code)}/activation`,
+  bulkStatus: "/keys/bulk-status",
+};
 const STORAGE_LANGUAGE_KEY = "redeem_chatgpt_language";
 const STORAGE_THEME_KEY = "redeem_chatgpt_theme";
 const LANGUAGE_ORDER = ["vi", "en", "ur"];
@@ -1531,7 +1537,7 @@ async function queryBatch(channel = "channel1") {
 
   try {
     if (channel === "channel2") {
-      const payload = await apiChannel2Json("/keys/bulk-status", {
+      const payload = await apiChannel2Json(CHANNEL2_ENDPOINTS.bulkStatus, {
         method: "POST",
         body: JSON.stringify({ codes }),
       });
@@ -2502,33 +2508,16 @@ async function apiChannel2Json(path, options = {}) {
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(endpoint, {
-    cache: "no-store",
-    ...options,
-    headers,
-  });
-  const raw = await response.text();
-
-  let parsed = {};
-  if (raw) {
-    try {
-      parsed = JSON.parse(raw);
-    } catch (_error) {
-      if (!response.ok) {
-        throw new Error(sanitizeChannel2ErrorMessage(raw, t().messages.channel2Unavailable));
-      }
-      throw new Error(sanitizeChannel2ErrorMessage(raw, t().messages.channel2Unavailable));
+  try {
+    return await fetchChannel2Json(endpoint, options, headers);
+  } catch (error) {
+    const proxyPath = buildChannel2ProxyPath(path);
+    if (!shouldRetryChannel2ViaProxy(error) || !proxyPath) {
+      throw error;
     }
-  }
 
-  if (!response.ok) {
-    const message = parsed && typeof parsed === "object"
-      ? decodeLooseText(parsed.error || parsed.message || parsed.code)
-      : decodeLooseText(raw);
-    throw new Error(sanitizeChannel2ErrorMessage(message, t().messages.channel2Unavailable));
+    return fetchChannel2Json(proxyPath, options, headers);
   }
-
-  return parsed;
 }
 
 function buildChannel2Endpoint(path) {
@@ -2544,8 +2533,67 @@ function buildChannel2Endpoint(path) {
   return `${CHANNEL2_DIRECT_BASE}${rawPath.startsWith("/") ? rawPath : `/${rawPath}`}`;
 }
 
+function buildChannel2ProxyPath(path) {
+  const rawPath = normalize(path);
+  if (!rawPath) {
+    return "";
+  }
+
+  if (rawPath === CHANNEL2_ENDPOINTS.activateSession) {
+    return "/api/channel2/redeem";
+  }
+
+  if (rawPath === CHANNEL2_ENDPOINTS.bulkStatus) {
+    return "/api/channel2/bulk-status";
+  }
+
+  const activationMatch = rawPath.match(/^\/keys\/([^/]+)\/activation$/i);
+  if (activationMatch) {
+    return `/api/channel2/activation/${activationMatch[1]}`;
+  }
+
+  const checkMatch = rawPath.match(/^\/keys\/([^/]+)$/i);
+  if (checkMatch) {
+    return `/api/channel2/check-cdk/${checkMatch[1]}`;
+  }
+
+  return "";
+}
+
+function shouldRetryChannel2ViaProxy(error) {
+  const message = normalize(error?.message).toLowerCase();
+  return message.includes("failed to fetch") || message.includes("networkerror") || message.includes("cors");
+}
+
+async function fetchChannel2Json(endpoint, options, headers) {
+  const response = await fetch(endpoint, {
+    cache: "no-store",
+    ...options,
+    headers,
+  });
+  const raw = await response.text();
+
+  let parsed = {};
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch (_error) {
+      throw new Error(sanitizeChannel2ErrorMessage(raw, t().messages.channel2Unavailable));
+    }
+  }
+
+  if (!response.ok) {
+    const message = parsed && typeof parsed === "object"
+      ? decodeLooseText(parsed.error || parsed.message || parsed.code)
+      : decodeLooseText(raw);
+    throw new Error(sanitizeChannel2ErrorMessage(message, t().messages.channel2Unavailable));
+  }
+
+  return parsed;
+}
+
 async function checkChannel2Cdk(code) {
-  const result = await apiChannel2Json(`/keys/${encodeURIComponent(code)}`, {
+  const result = await apiChannel2Json(CHANNEL2_ENDPOINTS.checkCdk(code), {
     method: "GET",
   });
 
@@ -2663,7 +2711,7 @@ async function beginChannel2Activation({ cdk, authRaw, verifiedUser }) {
   );
 
   try {
-    const result = await apiChannel2Json("/keys/activate-session", {
+    const result = await apiChannel2Json(CHANNEL2_ENDPOINTS.activateSession, {
       method: "POST",
       body: JSON.stringify({
         code: cdk,
@@ -2743,7 +2791,7 @@ async function pollChannel2Activation(code, verifiedUser) {
     let activation;
 
     try {
-      const raw = await apiChannel2Json(`/keys/${encodeURIComponent(code)}/activation`, {
+      const raw = await apiChannel2Json(CHANNEL2_ENDPOINTS.activation(code), {
         method: "GET",
       });
       activation = normalizeChannel2Activation(raw, code);
