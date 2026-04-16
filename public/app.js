@@ -104,6 +104,7 @@ const translations = {
       channel2Success: "Redeem Kênh 2 thành công.",
       channel2Failed: "Redeem Kênh 2 thất bại.",
       channel2Unavailable: "Kênh 2 đang tạm thời bị chặn hoặc không phản hồi đúng. Vui lòng thử lại sau.",
+      channel2Reconfiguring: "Kênh 2 đang được làm lại API. Tạm thời đã tắt, vui lòng chờ cấu hình mới.",
     },
     guide: [
       {
@@ -224,6 +225,7 @@ const translations = {
       channel2Success: "Channel 2 redeem succeeded.",
       channel2Failed: "Channel 2 redeem failed.",
       channel2Unavailable: "Channel 2 is temporarily blocked or unavailable. Please try again later.",
+      channel2Reconfiguring: "Channel 2 is being rebuilt with a new API. It is temporarily disabled.",
     },
     guide: [
       {
@@ -344,6 +346,7 @@ const translations = {
       channel2Success: "چینل 2 redeem کامیاب ہو گیا۔",
       channel2Failed: "چینل 2 redeem ناکام ہو گیا۔",
       channel2Unavailable: "چینل 2 عارضی طور پر بلاک ہے یا دستیاب نہیں۔ بعد میں دوبارہ کوشش کریں۔",
+      channel2Reconfiguring: "چینل 2 نئے API کے ساتھ دوبارہ ترتیب دیا جا رہا ہے، فی الحال عارضی طور پر بند ہے۔",
     },
     guide: [
       {
@@ -1559,7 +1562,14 @@ async function queryBatch(channel = "channel1") {
           }))
         : [];
     }
-  } catch (_error) {
+  } catch (error) {
+    if (channel === "channel2") {
+      showModal(
+        "error",
+        t().labels.failure,
+        normalizeError(error, t().messages.channel2Unavailable)
+      );
+    }
     state.batch.results = codes.map((code) => ({
       code,
       status: "invalid",
@@ -2502,35 +2512,43 @@ function buildChannel2BatchResults(codes, payload) {
 }
 
 async function apiChannel2Json(path, options = {}) {
-  const endpoint = buildChannel2Endpoint(path);
+  const endpoint = buildChannel2ProxyPath(path);
   const headers = new Headers(options.headers || {});
   if (options.body != null && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
-  try {
-    return await fetchChannel2Json(endpoint, options, headers);
-  } catch (error) {
-    const proxyPath = buildChannel2ProxyPath(path);
-    if (!shouldRetryChannel2ViaProxy(error) || !proxyPath) {
-      throw error;
+  if (!endpoint) {
+    throw new Error(t().messages.channel2Unavailable);
+  }
+
+  const response = await fetch(endpoint, {
+    cache: "no-store",
+    ...options,
+    headers,
+  });
+  const raw = await response.text();
+
+  let parsed = {};
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch (_error) {
+      if (!response.ok) {
+        throw new Error(sanitizeChannel2ErrorMessage(raw, t().messages.channel2Unavailable));
+      }
+      throw new Error(t().messages.channel2Unavailable);
     }
-
-    return fetchChannel2Json(proxyPath, options, headers);
-  }
-}
-
-function buildChannel2Endpoint(path) {
-  const rawPath = normalize(path);
-  if (!rawPath) {
-    return CHANNEL2_DIRECT_BASE;
   }
 
-  if (/^https?:\/\//i.test(rawPath)) {
-    return rawPath;
+  if (!response.ok) {
+    const message = parsed && typeof parsed === "object"
+      ? decodeLooseText(parsed.error || parsed.message || parsed.code)
+      : decodeLooseText(raw);
+    throw new Error(sanitizeChannel2ErrorMessage(message, t().messages.channel2Unavailable));
   }
 
-  return `${CHANNEL2_DIRECT_BASE}${rawPath.startsWith("/") ? rawPath : `/${rawPath}`}`;
+  return parsed;
 }
 
 function buildChannel2ProxyPath(path) {
@@ -2558,38 +2576,6 @@ function buildChannel2ProxyPath(path) {
   }
 
   return "";
-}
-
-function shouldRetryChannel2ViaProxy(error) {
-  const message = normalize(error?.message).toLowerCase();
-  return message.includes("failed to fetch") || message.includes("networkerror") || message.includes("cors");
-}
-
-async function fetchChannel2Json(endpoint, options, headers) {
-  const response = await fetch(endpoint, {
-    cache: "no-store",
-    ...options,
-    headers,
-  });
-  const raw = await response.text();
-
-  let parsed = {};
-  if (raw) {
-    try {
-      parsed = JSON.parse(raw);
-    } catch (_error) {
-      throw new Error(sanitizeChannel2ErrorMessage(raw, t().messages.channel2Unavailable));
-    }
-  }
-
-  if (!response.ok) {
-    const message = parsed && typeof parsed === "object"
-      ? decodeLooseText(parsed.error || parsed.message || parsed.code)
-      : decodeLooseText(raw);
-    throw new Error(sanitizeChannel2ErrorMessage(message, t().messages.channel2Unavailable));
-  }
-
-  return parsed;
 }
 
 async function checkChannel2Cdk(code) {
