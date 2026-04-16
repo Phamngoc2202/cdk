@@ -9,7 +9,7 @@ const INDEX_FILE = path.join(PUBLIC_DIR, "index.html");
 
 const CHANNEL1_BASE = "https://receipt-api.nitro.xin";
 const CHANNEL2_PRIMARY_BASE = "https://activatecdk.me/shop/api/activate/chatgpt";
-const CHANNEL2_SECONDARY_BASE = "";
+const CHANNEL2_SECONDARY_BASE = "https://doremon.me/shop/api/activate/chatgpt";
 const PRODUCT_ID = "chatgpt";
 const BODY_LIMIT_BYTES = 2 * 1024 * 1024;
 const FALLBACK_USER_AGENT =
@@ -158,22 +158,22 @@ function sendUpstream(res, upstream) {
   sendText(res, upstream.status, upstream.bodyText, contentType);
 }
 
-function getChannel2Headers(req, base, extraHeaders = {}) {
-  let origin = "https://activatecdk.me";
-  try {
-    origin = new URL(base).origin;
-  } catch (_error) {
-    origin = "https://activatecdk.me";
-  }
-
-  return {
+function getChannel2Headers(req, extraHeaders = {}, profile = "minimal") {
+  const headers = {
     Accept: "application/json, text/plain, */*",
     "Accept-Language": req.headers["accept-language"] || "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
     "User-Agent": req.headers["user-agent"] || FALLBACK_USER_AGENT,
-    Referer: `${origin}/`,
-    Origin: origin,
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
     ...extraHeaders,
   };
+
+  if (profile === "browser") {
+    headers.Origin = "https://activatecdk.me";
+    headers.Referer = "https://activatecdk.me/";
+  }
+
+  return headers;
 }
 
 async function proxyChannel1Json(res, upstreamPath, payload, headers = {}) {
@@ -211,27 +211,30 @@ async function proxyChannel2WithFallback(req, res, requestPath, options = {}) {
   const bases = getChannel2Bases();
   let lastError = null;
   let blockedByChallenge = false;
+  const headerProfiles = ["minimal", "browser"];
 
   for (const base of bases) {
     const targetUrl = `${base}${requestPath}`;
-    const headers = getChannel2Headers(req, base, options.headers || {});
+    for (const profile of headerProfiles) {
+      const headers = getChannel2Headers(req, options.headers || {}, profile);
 
-    try {
-      const upstream = await requestUpstream(targetUrl, {
-        method: options.method || "GET",
-        headers,
-        body: options.body,
-      });
+      try {
+        const upstream = await requestUpstream(targetUrl, {
+          method: options.method || "GET",
+          headers,
+          body: options.body,
+        });
 
-      if (isCloudflareChallenge(upstream.status, upstream.bodyText)) {
-        blockedByChallenge = true;
-        continue;
+        if (isCloudflareChallenge(upstream.status, upstream.bodyText)) {
+          blockedByChallenge = true;
+          continue;
+        }
+
+        sendUpstream(res, upstream);
+        return;
+      } catch (error) {
+        lastError = error;
       }
-
-      sendUpstream(res, upstream);
-      return;
-    } catch (error) {
-      lastError = error;
     }
   }
 

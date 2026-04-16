@@ -2,7 +2,6 @@
   "version": 2,
   "functions": {
     "api/[...path].js": {
-      "regions": ["hkg1"],
       "maxDuration": 30
     }
   },
