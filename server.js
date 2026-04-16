@@ -8,8 +8,8 @@ const port = Number(process.env.PORT) || 3000;
 const publicDir = path.join(__dirname, "public");
 const indexFile = path.join(publicDir, "index.html");
 const CHANNEL1_BASE = "https://receipt-api.nitro.xin";
-const CHANNEL2_PRIMARY_BASE = "https://doremon.me/shop/api/activate/chatgpt";
-const CHANNEL2_SECONDARY_BASE = "http://zenterra.io.vn/api/new";
+const CHANNEL2_PRIMARY_BASE = "https://activatecdk.me/shop/api/activate/chatgpt";
+const CHANNEL2_SECONDARY_BASE = "";
 const PRODUCT_ID = "chatgpt";
 const FALLBACK_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
@@ -92,13 +92,13 @@ function getChannel2Bases() {
 
 function getChannel2Headers(req, base, extraHeaders = {}) {
   const normalizedBase = normalizeBaseUrl(base);
-  let origin = "https://doremon.me";
+  let origin = "https://activatecdk.me";
 
   try {
     const parsed = new URL(normalizedBase);
     origin = parsed.origin;
   } catch (_error) {
-    origin = "https://doremon.me";
+    origin = "https://activatecdk.me";
   }
 
   const headers = {

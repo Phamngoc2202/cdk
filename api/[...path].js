@@ -8,8 +8,8 @@ const PUBLIC_DIR = path.join(ROOT_DIR, "public");
 const INDEX_FILE = path.join(PUBLIC_DIR, "index.html");
 
 const CHANNEL1_BASE = "https://receipt-api.nitro.xin";
-const CHANNEL2_PRIMARY_BASE = "https://doremon.me/shop/api/activate/chatgpt";
-const CHANNEL2_SECONDARY_BASE = "http://zenterra.io.vn/api/new";
+const CHANNEL2_PRIMARY_BASE = "https://activatecdk.me/shop/api/activate/chatgpt";
+const CHANNEL2_SECONDARY_BASE = "";
 const PRODUCT_ID = "chatgpt";
 const BODY_LIMIT_BYTES = 2 * 1024 * 1024;
 const FALLBACK_USER_AGENT =
@@ -159,11 +159,11 @@ function sendUpstream(res, upstream) {
 }
 
 function getChannel2Headers(req, base, extraHeaders = {}) {
-  let origin = "https://doremon.me";
+  let origin = "https://activatecdk.me";
   try {
     origin = new URL(base).origin;
   } catch (_error) {
-    origin = "https://doremon.me";
+    origin = "https://activatecdk.me";
   }
 
   return {
@@ -403,4 +403,3 @@ module.exports = async function handler(req, res) {
 
   serveStaticOrIndex(res, pathname);
 };
-

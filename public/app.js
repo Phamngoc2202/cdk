@@ -1124,6 +1124,12 @@ function renderBatchItem(item) {
           <h3>${escapeHtml(item.code || "-")}</h3>
           ${renderStatusBadge(batchStatusLabel(item.status), batchTone(item.status))}
         </div>
+        <div class="info-grid">
+          <div class="task-kv"><strong>${escapeHtml(t().labels.email)}</strong><span>${escapeHtml(item.user || "-")}</span></div>
+          <div class="task-kv"><strong>${escapeHtml(t().labels.app)}</strong><span>${escapeHtml(item.app_name || "-")}</span></div>
+          <div class="task-kv"><strong>${escapeHtml(t().labels.product)}</strong><span>${escapeHtml(item.product_name || "-")}</span></div>
+          <div class="task-kv"><strong>${escapeHtml(t().labels.redeemTime)}</strong><span>${escapeHtml(item.redeem_time || "-")}</span></div>
+        </div>
       </article>
     `;
   }
@@ -2176,26 +2182,60 @@ function parseLooseJsonValue(raw) {
     return null;
   }
 
-  let parsed = raw;
+  const source = String(raw)
+    .replaceAll("\u201c", '"')
+    .replaceAll("\u201d", '"')
+    .replaceAll("\u2018", "'")
+    .replaceAll("\u2019", "'")
+    .replaceAll("\ufeff", "")
+    .trim();
 
-  for (let attempts = 0; attempts < 3; attempts += 1) {
-    if (typeof parsed !== "string") {
-      break;
+  const candidates = [source];
+  const firstBrace = source.indexOf("{");
+  const lastBrace = source.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(source.slice(firstBrace, lastBrace + 1));
+  }
+  if (!source.startsWith("{") && source.includes('"user"')) {
+    candidates.push(`{${source.replace(/^[,\s]+/, "")}}`);
+  }
+
+  for (const candidate of candidates) {
+    let parsed = candidate;
+
+    for (let attempts = 0; attempts < 4; attempts += 1) {
+      if (typeof parsed !== "string") {
+        break;
+      }
+
+      const trimmed = parsed.trim();
+      if (!trimmed) {
+        break;
+      }
+
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch (_error) {
+        break;
+      }
     }
 
-    const trimmed = parsed.trim();
-    if (!trimmed) {
-      break;
-    }
-
-    try {
-      parsed = JSON.parse(trimmed);
-    } catch (_error) {
-      return null;
+    if (parsed && typeof parsed === "object") {
+      return parsed;
     }
   }
 
-  return parsed && typeof parsed === "object" ? parsed : null;
+  return null;
+}
+
+function extractEmailFromRaw(raw) {
+  const text = normalize(raw);
+  if (!text) {
+    return "";
+  }
+
+  const match = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? normalize(match[0]) : "";
 }
 
 function getAuthSessionPlanType(raw) {
@@ -2284,36 +2324,32 @@ function parseAuthSessionChannel2(raw) {
     throw new Error(t().messages.authRequired);
   }
 
-  let parsed = raw;
-
-  for (let attempts = 0; attempts < 3; attempts += 1) {
-    if (typeof parsed !== "string") {
-      break;
-    }
-
-    const trimmed = parsed.trim();
-    if (!trimmed) {
-      break;
-    }
-
-    try {
-      parsed = JSON.parse(trimmed);
-    } catch (_error) {
-      break;
-    }
-  }
+  const parsed = parseLooseJsonValue(raw);
+  const emailFromRaw = extractEmailFromRaw(raw);
 
   if (!parsed || typeof parsed !== "object") {
-    throw new Error(t().messages.authParseFailed);
-  }
+    if (!emailFromRaw) {
+      throw new Error(t().messages.authParseFailed);
+    }
 
-  if (!normalize(parsed.accessToken)) {
-    throw new Error(t().messages.authInvalid);
+    const extra = {
+      channel: channelLabel("channel2"),
+      email: emailFromRaw,
+    };
+
+    return {
+      verified: true,
+      user: emailFromRaw,
+      email: emailFromRaw,
+      name: "",
+      has_sub: false,
+      extra,
+    };
   }
 
   const userObject = parsed.user && typeof parsed.user === "object" ? parsed.user : {};
   const accountObject = parsed.account && typeof parsed.account === "object" ? parsed.account : {};
-  const account = normalize(userObject.email) || normalize(parsed.email);
+  const account = normalize(userObject.email) || normalize(parsed.email) || emailFromRaw;
   const name = normalize(userObject.name) || normalize(parsed.name);
   const structure = normalize(accountObject.structure).toLowerCase();
   const currentPlan = normalize(accountObject.planType) || "free";
@@ -2420,8 +2456,8 @@ function buildChannel2BatchResults(codes, payload) {
     foundMap.set(code, {
       code,
       status: normalizeChannel2BulkStatus(item?.status),
-      user: "",
-      redeem_time: "",
+      user: normalize(item?.activated_email || item?.email || item?.user),
+      redeem_time: normalize(item?.activated_at || item?.subscription_ends_at),
       app_name: normalize(item?.service) || "chatgpt",
       product_name: [normalize(item?.plan), normalize(item?.term)].filter(Boolean).join(" / "),
       status_raw: normalize(item?.status) || "unknown",
