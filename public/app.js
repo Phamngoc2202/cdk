@@ -1,6 +1,7 @@
 const PRODUCT_ID = "chatgpt";
 const POLL_INTERVAL_MS = 3000;
 const CHANNEL2_POLL_INTERVAL_MS = 1000;
+const CHANNEL2_DIRECT_BASE = "https://activatecdk.me/shop/api/activate/chatgpt";
 const STORAGE_LANGUAGE_KEY = "redeem_chatgpt_language";
 const STORAGE_THEME_KEY = "redeem_chatgpt_theme";
 const LANGUAGE_ORDER = ["vi", "en", "ur"];
@@ -1530,7 +1531,7 @@ async function queryBatch(channel = "channel1") {
 
   try {
     if (channel === "channel2") {
-      const payload = await apiChannel2Json("/api/channel2/bulk-status", {
+      const payload = await apiChannel2Json("/keys/bulk-status", {
         method: "POST",
         body: JSON.stringify({ codes }),
       });
@@ -2495,12 +2496,14 @@ function buildChannel2BatchResults(codes, payload) {
 }
 
 async function apiChannel2Json(path, options = {}) {
+  const endpoint = buildChannel2Endpoint(path);
   const headers = new Headers(options.headers || {});
   if (options.body != null && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(path, {
+  const response = await fetch(endpoint, {
+    cache: "no-store",
     ...options,
     headers,
   });
@@ -2528,8 +2531,21 @@ async function apiChannel2Json(path, options = {}) {
   return parsed;
 }
 
+function buildChannel2Endpoint(path) {
+  const rawPath = normalize(path);
+  if (!rawPath) {
+    return CHANNEL2_DIRECT_BASE;
+  }
+
+  if (/^https?:\/\//i.test(rawPath)) {
+    return rawPath;
+  }
+
+  return `${CHANNEL2_DIRECT_BASE}${rawPath.startsWith("/") ? rawPath : `/${rawPath}`}`;
+}
+
 async function checkChannel2Cdk(code) {
-  const result = await apiChannel2Json(`/api/channel2/check-cdk/${encodeURIComponent(code)}`, {
+  const result = await apiChannel2Json(`/keys/${encodeURIComponent(code)}`, {
     method: "GET",
   });
 
@@ -2647,7 +2663,7 @@ async function beginChannel2Activation({ cdk, authRaw, verifiedUser }) {
   );
 
   try {
-    const result = await apiChannel2Json("/api/channel2/redeem", {
+    const result = await apiChannel2Json("/keys/activate-session", {
       method: "POST",
       body: JSON.stringify({
         code: cdk,
@@ -2727,7 +2743,7 @@ async function pollChannel2Activation(code, verifiedUser) {
     let activation;
 
     try {
-      const raw = await apiChannel2Json(`/api/channel2/activation/${encodeURIComponent(code)}`, {
+      const raw = await apiChannel2Json(`/keys/${encodeURIComponent(code)}/activation`, {
         method: "GET",
       });
       activation = normalizeChannel2Activation(raw, code);
