@@ -17,6 +17,10 @@ const state = {
   batchResults: [],
   message: "",
   messageType: "info",
+  modalOpen: false,
+  modalTitle: "",
+  modalMessage: "",
+  modalType: "info",
 };
 
 init();
@@ -99,6 +103,9 @@ async function onClick(event) {
       state.batchResults = [];
       render();
       break;
+    case "close-modal":
+      closeModal();
+      break;
     default:
       break;
   }
@@ -159,6 +166,7 @@ function render() {
         </section>
       </div>
     </div>
+    ${renderModal()}
   `;
 }
 
@@ -173,6 +181,34 @@ function renderMessage() {
 
   const cls = state.messageType === "error" ? "status-inline error" : state.messageType === "success" ? "status-inline success" : "status-inline";
   return `<div class="${cls}">${escapeHtml(state.message)}</div>`;
+}
+
+function renderModal() {
+  if (!state.modalOpen) {
+    return "";
+  }
+
+  const tone =
+    state.modalType === "error"
+      ? "#ef4444"
+      : state.modalType === "success"
+        ? "#22c55e"
+        : "#3b82f6";
+
+  return `
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;">
+      <div style="width:min(520px,100%);background:#fff;border-radius:12px;border:1px solid #e5e7eb;box-shadow:0 12px 28px rgba(0,0,0,0.25);overflow:hidden;">
+        <div style="padding:12px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+          <strong style="color:${tone};">${escapeHtml(state.modalTitle || "Notification")}</strong>
+          <button data-action="close-modal" style="border:0;background:transparent;font-size:20px;line-height:1;cursor:pointer;" aria-label="Close">&times;</button>
+        </div>
+        <div style="padding:16px;white-space:pre-wrap;color:#111827;">${escapeHtml(state.modalMessage)}</div>
+        <div style="padding:12px 16px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;">
+          <button class="button-secondary" data-action="close-modal">OK</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderTask(task, title) {
@@ -238,10 +274,10 @@ async function checkCdk() {
     }
 
     state.cdkChecked = true;
-    setMessage("CDK valid.", "success");
+    setMessage(buildCdkCheckMessage(result, code), "success");
   } catch (error) {
     state.cdkChecked = false;
-    setMessage(normalizeError(error, "CDK invalid."), "error");
+    setMessage(`CDK check failed\nCode: ${code}\nReason: ${normalizeError(error, "CDK invalid.")}`, "error");
   } finally {
     state.checkingCdk = false;
     render();
@@ -283,10 +319,13 @@ async function checkAuth() {
     }
 
     state.authChecked = true;
-    setMessage("AuthSession valid.", "success");
+    setMessage(buildAuthCheckMessage(result, cdk), "success");
   } catch (error) {
     state.authChecked = false;
-    setMessage(normalizeError(error, "AuthSession invalid."), "error");
+    setMessage(
+      `AuthSession check failed\nCDK: ${cdk}\nReason: ${normalizeError(error, "AuthSession invalid.")}`,
+      "error"
+    );
   } finally {
     state.checkingAuth = false;
     render();
@@ -317,9 +356,12 @@ async function redeem() {
       error: "",
     };
 
-    setMessage(`Redeem started. Task ID: ${state.task.task_id}`, "success");
+    setMessage(buildTaskMessage(state.task, "Redeem request sent"), "success");
   } catch (error) {
-    setMessage(normalizeError(error, "Redeem failed."), "error");
+    setMessage(
+      `Redeem failed\nCDK: ${state.cdk.trim()}\nReason: ${normalizeError(error, "Redeem failed.")}`,
+      "error"
+    );
   } finally {
     state.redeeming = false;
     render();
@@ -339,9 +381,9 @@ async function queryTask() {
   try {
     const raw = await apiJson(`/api/channel1/task/${encodeURIComponent(taskId)}`, { method: "GET" });
     state.taskLookupResult = normalizeTask(raw);
-    setMessage("Task queried.", "success");
+    setMessage(buildTaskMessage(state.taskLookupResult, "Task queried"), "success");
   } catch (error) {
-    setMessage(normalizeError(error, "Query task failed."), "error");
+    setMessage(`Task query failed\nTask ID: ${taskId}\nReason: ${normalizeError(error, "Query task failed.")}`, "error");
   } finally {
     state.taskLookupLoading = false;
     render();
@@ -375,9 +417,9 @@ async function queryBatch() {
         }))
       : [];
 
-    setMessage("Batch query done.", "success");
+    setMessage(buildBatchSummaryMessage(codes.length, state.batchResults), "success");
   } catch (error) {
-    setMessage(normalizeError(error, "Batch query failed."), "error");
+    setMessage(`Batch query failed\nInput: ${codes.length} code(s)\nReason: ${normalizeError(error, "Batch query failed.")}`, "error");
   } finally {
     state.batchLoading = false;
     render();
@@ -430,6 +472,91 @@ function clampProgress(value) {
 function setMessage(message, type = "info") {
   state.message = String(message || "").trim();
   state.messageType = type;
+  state.modalOpen = Boolean(state.message);
+  state.modalTitle = type === "error" ? "Error" : type === "success" ? "Success" : "Notification";
+  state.modalMessage = state.message;
+  state.modalType = type;
+}
+
+function closeModal() {
+  state.modalOpen = false;
+  state.modalTitle = "";
+  state.modalMessage = "";
+  state.modalType = "info";
+  render();
+}
+
+function buildCdkCheckMessage(result, code) {
+  const lines = [
+    "CDK valid",
+    `Code: ${code}`,
+    `Used: ${Boolean(result?.used) ? "yes" : "no"}`,
+    `App: ${pickText(result, ["app_name", "app", "service"], "-")}`,
+    `Product: ${pickText(result, ["app_product_name", "product_name", "product", "plan"], "-")}`,
+    `Status: ${pickText(result, ["status"], "-")}`,
+  ];
+  return lines.join("\n");
+}
+
+function buildAuthCheckMessage(result, cdk) {
+  const lines = [
+    "AuthSession valid",
+    `CDK: ${cdk}`,
+    `Verified: ${Boolean(result?.verified) ? "yes" : "no"}`,
+    `Email: ${pickText(result, ["email"], "-")}`,
+    `User: ${pickText(result, ["user", "name"], "-")}`,
+    `Has Sub: ${Boolean(result?.has_sub) ? "yes" : "no"}`,
+  ];
+  return lines.join("\n");
+}
+
+function buildTaskMessage(task, title) {
+  const lines = [
+    title,
+    `Task ID: ${task?.task_id || "-"}`,
+    `CDK: ${task?.cdk || "-"}`,
+    `Status: ${task?.status || "-"}`,
+    `Progress: ${clampProgress(task?.progress)}%`,
+    `Message: ${task?.message || task?.error || "-"}`,
+  ];
+  return lines.join("\n");
+}
+
+function buildBatchSummaryMessage(inputCount, results) {
+  const used = results.filter((item) => item.status === "used").length;
+  const unused = results.filter((item) => item.status === "unused").length;
+  const invalid = results.length - used - unused;
+  const sample = results
+    .slice(0, 8)
+    .map((item) => `${item.code || "-"}: ${item.status || "invalid"}`)
+    .join("\n");
+
+  const lines = [
+    "Batch query done",
+    `Input: ${inputCount}`,
+    `Found: ${results.length}`,
+    `Used: ${used}`,
+    `Unused: ${unused}`,
+    `Invalid: ${invalid}`,
+    "",
+    "Sample:",
+    sample || "-",
+  ];
+
+  return lines.join("\n");
+}
+
+function pickText(obj, keys, fallback = "-") {
+  for (const key of keys) {
+    const value = obj?.[key];
+    if (value === 0) {
+      return "0";
+    }
+    if (value) {
+      return String(value);
+    }
+  }
+  return fallback;
 }
 
 async function apiJson(url, options = {}) {
