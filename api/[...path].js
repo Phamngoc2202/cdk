@@ -202,6 +202,13 @@ async function handleApi(req, res, pathname) {
         await proxyChannel1Get(res, `/stocks/public/outstock/${encodeURIComponent(decodeURIComponent(taskMatch[1]))}`);
         return;
       }
+
+      const usageMatch = matchRoute(pathname, /^\/api\/channel1\/check-usage\/([^/]+)$/);
+      if (usageMatch) {
+        const codes = usageMatch[1];
+        await proxyChannel1Get(res, `/public/check-usage/${codes}`);
+        return;
+      }
     }
 
     if (req.method === "POST" && pathname === "/api/channel1/batch-query") {

@@ -9,12 +9,10 @@ const state = {
   checkingAuth: false,
   redeeming: false,
   task: null,
-  taskLookupId: "",
-  taskLookupLoading: false,
-  taskLookupResult: null,
   batchInput: "",
   batchLoading: false,
   batchResults: [],
+  batchTab: "all",
   message: "",
   messageType: "info",
   modalOpen: false,
@@ -56,12 +54,6 @@ function onInput(event) {
     return;
   }
 
-  if (el.matches("[data-model='task-id']")) {
-    state.taskLookupId = el.value;
-    render();
-    return;
-  }
-
   if (el.matches("[data-model='batch']")) {
     state.batchInput = el.value;
     render();
@@ -84,23 +76,29 @@ async function onClick(event) {
     case "redeem":
       await redeem();
       break;
-    case "query-task":
-      await queryTask();
-      break;
     case "query-batch":
       await queryBatch();
       break;
     case "clear-redeem":
       clearRedeem();
       break;
-    case "clear-task":
-      state.taskLookupId = "";
-      state.taskLookupResult = null;
-      render();
-      break;
     case "clear-batch":
       state.batchInput = "";
       state.batchResults = [];
+      state.batchTab = "all";
+      render();
+      break;
+    case "copy-all":
+      await copyBatch("all");
+      break;
+    case "copy-used":
+      await copyBatch("used");
+      break;
+    case "copy-unused":
+      await copyBatch("unused");
+      break;
+    case "set-batch-tab":
+      state.batchTab = btn.dataset.tab || "all";
       render();
       break;
     case "close-modal":
@@ -141,25 +139,15 @@ function render() {
           </article>
 
           <article class="card">
-            <h2>Task Lookup</h2>
-            <div class="field-stack">
-              <input class="input-field" data-model="task-id" value="${escapeAttr(state.taskLookupId)}" placeholder="task_id" ${state.taskLookupLoading ? "disabled" : ""} />
-              <div class="task-actions">
-                <button class="button-secondary" data-action="query-task" ${state.taskLookupLoading ? "disabled" : ""}>${state.taskLookupLoading ? "Querying..." : "Query Task"}</button>
-                <button class="button-secondary" data-action="clear-task" ${state.taskLookupLoading ? "disabled" : ""}>Clear</button>
-              </div>
-              ${state.taskLookupResult ? renderTask(state.taskLookupResult, "Task Result") : ""}
-            </div>
-          </article>
-
-          <article class="card">
-            <h2>Batch CDK Lookup (Channel 1)</h2>
+            <h2>CDK Lookup (Channel 1)</h2>
             <div class="field-stack">
               <textarea class="input-field token-field" data-model="batch" placeholder="One CDK per line" ${state.batchLoading ? "disabled" : ""}>${escapeHtml(state.batchInput)}</textarea>
               <div class="task-actions">
                 <button class="button-secondary" data-action="query-batch" ${state.batchLoading || parseCodes(state.batchInput).length === 0 ? "disabled" : ""}>${state.batchLoading ? "Querying..." : "Query"}</button>
                 <button class="button-secondary" data-action="clear-batch" ${state.batchLoading ? "disabled" : ""}>Clear</button>
               </div>
+              ${renderBatchSummary()}
+              ${renderBatchTools()}
               ${renderBatchResults()}
             </div>
           </article>
@@ -226,13 +214,59 @@ function renderTask(task, title) {
   `;
 }
 
-function renderBatchResults() {
+function renderBatchSummary() {
+  const total = state.batchResults.length;
+  const used = state.batchResults.filter((item) => item.status === "used").length;
+  const unused = state.batchResults.filter((item) => item.status === "unused").length;
+  if (!total) {
+    return "";
+  }
+  return `
+    <div class="info-grid">
+      <div class="task-kv"><strong>Total</strong><span>${total}</span></div>
+      <div class="task-kv"><strong>Used</strong><span>${used}</span></div>
+      <div class="task-kv"><strong>Unused</strong><span>${unused}</span></div>
+    </div>
+  `;
+}
+
+function renderBatchTools() {
   if (!state.batchResults.length) {
     return "";
   }
+  return `
+    <div class="result-stage">
+      <h3>Copy</h3>
+      <div class="task-actions">
+        <button class="button-secondary" data-action="copy-all">Copy All</button>
+        <button class="button-secondary" data-action="copy-used">Copy Used</button>
+        <button class="button-secondary" data-action="copy-unused">Copy Unused</button>
+      </div>
+      <div class="task-actions">
+        <button class="button-secondary" data-action="set-batch-tab" data-tab="all" ${state.batchTab === "all" ? "disabled" : ""}>All</button>
+        <button class="button-secondary" data-action="set-batch-tab" data-tab="used" ${state.batchTab === "used" ? "disabled" : ""}>Used</button>
+        <button class="button-secondary" data-action="set-batch-tab" data-tab="unused" ${state.batchTab === "unused" ? "disabled" : ""}>Unused</button>
+      </div>
+    </div>
+  `;
+}
 
-  const items = state.batchResults
+function renderBatchResults() {
+  const list =
+    state.batchTab === "used"
+      ? state.batchResults.filter((item) => item.status === "used")
+      : state.batchTab === "unused"
+        ? state.batchResults.filter((item) => item.status === "unused")
+        : state.batchResults;
+
+  if (!list.length) {
+    return "";
+  }
+
+  const items = list
     .map((item) => {
+      const email = item.email || item.user || "";
+      const showUser = Boolean(item.user && item.user !== email);
       return `
         <article class="usage-card">
           <div class="summary-head">
@@ -240,7 +274,8 @@ function renderBatchResults() {
             <span class="status-badge">${escapeHtml(item.status || "invalid")}</span>
           </div>
           <div class="info-grid">
-            <div class="task-kv"><strong>User</strong><span>${escapeHtml(item.user || "-")}</span></div>
+            <div class="task-kv"><strong>Email</strong><span>${escapeHtml(email || "-")}</span></div>
+            ${showUser ? `<div class="task-kv"><strong>User</strong><span>${escapeHtml(item.user)}</span></div>` : ""}
             <div class="task-kv"><strong>App</strong><span>${escapeHtml(item.app_name || "-")}</span></div>
             <div class="task-kv"><strong>Product</strong><span>${escapeHtml(item.product_name || "-")}</span></div>
             <div class="task-kv"><strong>Redeem Time</strong><span>${escapeHtml(item.redeem_time || "-")}</span></div>
@@ -352,11 +387,19 @@ async function redeem() {
       cdk: state.cdk.trim(),
       status: "created",
       progress: 0,
-      message: "Task created.",
+      message: "Task created. Waiting for completion...",
       error: "",
     };
 
     setMessage(buildTaskMessage(state.task, "Redeem request sent"), "success");
+
+    const finalTask = await waitForRedeemTask(state.task.task_id);
+    state.task = finalTask;
+    if (finalTask.success) {
+      setMessage(buildTaskMessage(finalTask, "Redeem completed successfully"), "success");
+    } else {
+      setMessage(buildTaskMessage(finalTask, "Redeem failed"), "error");
+    }
   } catch (error) {
     setMessage(
       `Redeem failed\nCDK: ${state.cdk.trim()}\nReason: ${normalizeError(error, "Redeem failed.")}`,
@@ -364,28 +407,6 @@ async function redeem() {
     );
   } finally {
     state.redeeming = false;
-    render();
-  }
-}
-
-async function queryTask() {
-  const taskId = state.taskLookupId.trim();
-  if (!taskId) {
-    setMessage("Enter task id first.", "error");
-    return;
-  }
-
-  state.taskLookupLoading = true;
-  render();
-
-  try {
-    const raw = await apiJson(`/api/channel1/task/${encodeURIComponent(taskId)}`, { method: "GET" });
-    state.taskLookupResult = normalizeTask(raw);
-    setMessage(buildTaskMessage(state.taskLookupResult, "Task queried"), "success");
-  } catch (error) {
-    setMessage(`Task query failed\nTask ID: ${taskId}\nReason: ${normalizeError(error, "Query task failed.")}`, "error");
-  } finally {
-    state.taskLookupLoading = false;
     render();
   }
 }
@@ -401,29 +422,49 @@ async function queryBatch() {
   render();
 
   try {
-    const result = await apiJson("/api/channel1/batch-query", {
-      method: "POST",
-      body: JSON.stringify({ codes }),
-    });
-
-    state.batchResults = Array.isArray(result)
-      ? result.map((item) => ({
-          code: item.code,
-          status: item.used ? "used" : "unused",
-          user: item.user,
-          redeem_time: item.redeem_time,
-          app_name: item.app_name,
-          product_name: item.product_name,
-        }))
-      : [];
-
+    const encoded = codes.map((code) => encodeURIComponent(code)).join(",");
+    const result = await apiJson(`/api/channel1/check-usage/${encoded}`, { method: "GET" });
+    const rows = Array.isArray(result) ? result : [result];
+    state.batchResults = rows
+      .filter(Boolean)
+      .map((item, idx) => ({
+        code: String(item.code || codes[idx] || "").trim(),
+        status: item.used ? "used" : "unused",
+        user: item.user || "",
+        email: item.email || item.user || "",
+        redeem_time: item.redeem_time || "",
+        app_name: item.app_name || "",
+        product_name: item.product_name || item.app_product_name || "",
+      }));
+    state.batchTab = "all";
     setMessage(buildBatchSummaryMessage(codes.length, state.batchResults), "success");
   } catch (error) {
-    setMessage(`Batch query failed\nInput: ${codes.length} code(s)\nReason: ${normalizeError(error, "Batch query failed.")}`, "error");
+    setMessage(`CDK query failed\nInput: ${codes.length} code(s)\nReason: ${normalizeError(error, "Query CDK failed.")}`, "error");
   } finally {
     state.batchLoading = false;
     render();
   }
+}
+
+async function copyBatch(mode) {
+  const list =
+    mode === "used"
+      ? state.batchResults.filter((item) => item.status === "used")
+      : mode === "unused"
+        ? state.batchResults.filter((item) => item.status === "unused")
+        : state.batchResults;
+  const text = list.map((item) => item.code).filter(Boolean).join("\n");
+  if (!text) {
+    setMessage("No CDK to copy.", "error");
+    return;
+  }
+  try {
+    await copyText(text);
+    setMessage(`Copied ${list.length} CDK(s).`, "success");
+  } catch (error) {
+    setMessage(`Copy failed\nReason: ${normalizeError(error, "Copy failed.")}`, "error");
+  }
+  render();
 }
 
 function clearRedeem() {
@@ -446,9 +487,11 @@ function parseCodes(input) {
 
 function normalizeTask(raw) {
   const status = String(raw?.status || "").toLowerCase();
-  const pending = !["finish", "cancel", "failed", "success"].includes(status);
+  const pendingFromApi = typeof raw?.pending === "boolean" ? raw.pending : null;
+  const successFromApi = typeof raw?.success === "boolean" ? raw.success : null;
+  const pending = pendingFromApi ?? !["finish", "cancel", "failed", "success"].includes(status);
   const error = String(raw?.error || "").trim();
-  const success = status === "finish" && !error;
+  const success = successFromApi ?? (status === "finish" && !error);
   return {
     task_id: raw?.task_id || "",
     cdk: raw?.cdk || "",
@@ -496,6 +539,39 @@ function buildCdkCheckMessage(result, code) {
     `Status: ${pickText(result, ["status"], "-")}`,
   ];
   return lines.join("\n");
+}
+
+async function waitForRedeemTask(taskId) {
+  const maxAttempts = 25;
+  const delayMs = 3000;
+  let latest = state.task || { task_id: taskId, status: "created", progress: 0, pending: true, success: false, message: "" };
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    await sleep(delayMs);
+    try {
+      const raw = await apiJson(`/api/channel1/task/${encodeURIComponent(taskId)}`, { method: "GET" });
+      latest = normalizeTask(raw);
+      state.task = latest;
+      render();
+      if (!latest.pending) {
+        return latest;
+      }
+    } catch {
+      // keep polling until timeout
+    }
+  }
+
+  return {
+    ...latest,
+    pending: false,
+    success: false,
+    message: latest.message || "Timed out while waiting for redeem result.",
+    error: latest.error || "timeout",
+  };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildAuthCheckMessage(result, cdk) {
@@ -546,6 +622,22 @@ function buildBatchSummaryMessage(inputCount, results) {
   return lines.join("\n");
 }
 
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.style.position = "fixed";
+  area.style.left = "-9999px";
+  document.body.appendChild(area);
+  area.focus();
+  area.select();
+  document.execCommand("copy");
+  document.body.removeChild(area);
+}
+
 function pickText(obj, keys, fallback = "-") {
   for (const key of keys) {
     const value = obj?.[key];
@@ -572,7 +664,17 @@ async function apiJson(url, options = {}) {
   });
 
   const raw = await response.text();
-  const data = raw ? JSON.parse(raw) : {};
+  let data = {};
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      if (!response.ok) {
+        throw new Error(raw || `HTTP ${response.status}`);
+      }
+      throw new Error(`Invalid JSON response (HTTP ${response.status})`);
+    }
+  }
 
   if (!response.ok) {
     throw new Error(data?.message || data?.error || raw || `HTTP ${response.status}`);

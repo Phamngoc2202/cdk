@@ -130,9 +130,23 @@ app.get("/api/channel1/task/:taskId", async (req, res) => {
   });
 });
 
+app.get("/api/channel1/check-usage/:codes", async (req, res) => {
+  const rawCodes = String(req.params.codes || "");
+  await proxyResponse(res, `${CHANNEL1_BASE}/public/check-usage/${rawCodes}`, {
+    method: "GET",
+  });
+});
+
 app.post("/api/channel1/batch-query", async (req, res) => {
   const codes = Array.isArray(req.body?.codes) ? req.body.codes : [];
   await proxyText(res, `${CHANNEL1_BASE}/cdks/public/check-usage2`, codes.map((code) => encodeURIComponent(String(code))).join("\n"));
+});
+
+app.use("/api", (_req, res) => {
+  res.status(404).json({
+    code: "not_found",
+    message: "API route not found",
+  });
 });
 
 app.use(express.static(publicDir));

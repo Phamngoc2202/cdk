@@ -870,6 +870,11 @@ button {
   word-break: break-word;
 }
 
+.usage-card .task-kv span {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 .footer-note {
   margin-top: 18px;
   text-align: center;
@@ -1139,5 +1144,10 @@ html[dir="rtl"] .task-kv {
 
   .task-kv {
     grid-template-columns: 1fr;
+  }
+
+  .usage-card .summary-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
