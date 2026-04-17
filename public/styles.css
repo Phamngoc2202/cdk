@@ -139,8 +139,18 @@ pre {
 
 .top-actions {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   justify-items: end;
+}
+
+.toolbar-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .clock-card {
@@ -187,7 +197,6 @@ pre {
 }
 
 .nav-pills,
-.button-cluster,
 .guide-actions,
 .button-strip,
 .field-row,
@@ -228,6 +237,81 @@ pre {
 .icon-button {
   padding: 11px 16px;
   font-weight: 600;
+}
+
+.nav-pills--primary {
+  gap: 12px;
+}
+
+.nav-pills--primary .nav-pill {
+  min-height: 58px;
+  padding: 14px 24px;
+  border-color: rgba(52, 120, 246, 0.18);
+  background: rgba(52, 120, 246, 0.08);
+  box-shadow: 0 14px 30px rgba(52, 120, 246, 0.08);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.nav-pills--primary .nav-pill.is-active {
+  background: linear-gradient(135deg, rgba(52, 120, 246, 0.2), rgba(106, 158, 255, 0.18));
+  border-color: rgba(52, 120, 246, 0.34);
+  box-shadow: 0 18px 34px rgba(52, 120, 246, 0.14);
+}
+
+body[data-theme="dark"] .nav-pills--primary .nav-pill {
+  border-color: rgba(125, 166, 255, 0.18);
+  background: rgba(125, 166, 255, 0.08);
+  color: #e6efff;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.22);
+}
+
+body[data-theme="dark"] .nav-pills--primary .nav-pill.is-active {
+  background: linear-gradient(135deg, rgba(76, 132, 255, 0.3), rgba(125, 176, 255, 0.22));
+  border-color: rgba(125, 176, 255, 0.42);
+  color: #8bb6ff;
+  box-shadow: 0 18px 36px rgba(18, 57, 130, 0.34);
+}
+
+.icon-button--toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  border-color: var(--border);
+}
+
+.icon-button__symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.icon-button__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 28px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.toolbar-card .icon-button--toggle:hover:not(:disabled) {
+  background: rgba(52, 120, 246, 0.12);
+  border-color: rgba(52, 120, 246, 0.3);
 }
 
 .nav-pill.is-active {
@@ -842,11 +926,15 @@ body[data-theme="dark"] .data-card {
   }
 
   .nav-pills,
-  .button-cluster,
   .guide-actions,
   .button-strip,
   .field-row--end {
     flex-direction: column;
+  }
+
+  .nav-pills--primary .nav-pill {
+    width: 100%;
+    justify-content: center;
   }
 
   .guide-panel {
@@ -877,6 +965,10 @@ body[data-theme="dark"] .data-card {
   .copy-link,
   .icon-button {
     width: 100%;
+  }
+
+  .icon-button--toggle {
+    justify-content: center;
   }
 
   .stats-grid {

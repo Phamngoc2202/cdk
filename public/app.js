@@ -933,16 +933,30 @@ function renderHeader(route) {
         ${summary ? `<p class="brand__summary">${escapeHtml(summary)}</p>` : ""}
       </div>
       <div class="top-actions">
-        <nav class="nav-pills">
+        <div class="toolbar-card">
+          <button
+            type="button"
+            class="icon-button icon-button--toggle"
+            data-action="toggle-language"
+            aria-label="${escapeAttr(text.common.languageShort)}"
+            title="${escapeAttr(text.common.languageShort)}"
+          >
+            <span class="icon-button__badge">${escapeHtml(text.common.languageShort)}</span>
+          </button>
+          <button
+            type="button"
+            class="icon-button icon-button--toggle"
+            data-action="toggle-theme"
+            aria-label="${escapeAttr(state.theme === "dark" ? text.common.themeLight : text.common.themeDark)}"
+            title="${escapeAttr(state.theme === "dark" ? text.common.themeLight : text.common.themeDark)}"
+          >
+            <span class="icon-button__symbol">${state.theme === "dark" ? "☀" : "☾"}</span>
+          </button>
+        </div>
+        <nav class="nav-pills nav-pills--primary">
           <a href="/redeem/chatgpt" class="nav-pill ${route.name === "redeem" ? "is-active" : ""}">${escapeHtml(text.common.navRedeem)}</a>
           <a href="/public/query-cdk" class="nav-pill ${route.name === "query" ? "is-active" : ""}">${escapeHtml(text.common.navQuery)}</a>
         </nav>
-        <div class="button-cluster">
-          <button type="button" class="icon-button" data-action="toggle-language">${escapeHtml(text.common.languageShort)}</button>
-          <button type="button" class="icon-button" data-action="toggle-theme">
-            ${state.theme === "dark" ? escapeHtml(text.common.themeLight) : escapeHtml(text.common.themeDark)}
-          </button>
-        </div>
       </div>
     </header>
   `;
