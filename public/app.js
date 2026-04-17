@@ -339,6 +339,8 @@ const state = {
 
 const app = document.getElementById("app");
 let clockTimerStarted = false;
+const TASK_POLL_INTERVAL_FAST_MS = 5000;
+const TASK_POLL_INTERVAL_SLOW_MS = 10000;
 
 function loadLanguage() {
   const stored = localStorage.getItem(STORAGE_KEYS.language);
@@ -530,6 +532,22 @@ function statusLabel(status) {
 
 function delay(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function formatTaskErrorMessage(message) {
+  const raw = String(message || "").trim();
+  if (!raw) {
+    return raw;
+  }
+
+  const lower = raw.toLowerCase();
+  if (lower.includes("api.openai.com/v1/receipts") && lower.includes("service unavailable")) {
+    return state.lang === "vi"
+      ? "Dich vu OpenAI tam thoi khong kha dung. Hay thu lai sau."
+      : "The OpenAI service is temporarily unavailable. Please try again later.";
+  }
+
+  return raw;
 }
 
 function pad2(value) {
@@ -744,11 +762,12 @@ async function lookupTask(taskId, silent = false) {
   try {
     const data = await fetchJson(`/api/channel1/task/${encodeURIComponent(id)}`);
     const normalized = normalizeTaskStatus(data);
+    const displayMessage = formatTaskErrorMessage(normalized.message);
 
     state.redeem.taskId = id;
     state.redeem.lookupTaskId = id;
     state.redeem.taskStatus = normalized.state;
-    state.redeem.taskMessage = normalized.message || "";
+    state.redeem.taskMessage = displayMessage || "";
     state.redeem.taskProgress = normalized.progress;
 
     if (!silent) {
@@ -756,7 +775,7 @@ async function lookupTask(taskId, silent = false) {
         normalized.state === "success"
           ? text.redeem.task.success
           : normalized.state === "error"
-          ? normalized.message || text.redeem.task.error
+          ? displayMessage || text.redeem.task.error
           : normalized.state === "created"
           ? text.redeem.task.created
           : text.redeem.task.pending;
@@ -771,7 +790,7 @@ async function lookupTask(taskId, silent = false) {
   } catch (error) {
     state.redeem.taskId = id;
     state.redeem.taskStatus = "error";
-    state.redeem.taskMessage = error.message || text.redeem.errors.network;
+    state.redeem.taskMessage = formatTaskErrorMessage(error.message || text.redeem.errors.network);
     state.redeem.taskProgress = 0;
     if (!silent) {
       setNotice("error", text.redeem.taskPanelTitle, state.redeem.taskMessage);
@@ -826,8 +845,11 @@ async function redeemCdk() {
     state.redeem.taskMessage = "";
     render();
 
+    let pollCount = 0;
     for (;;) {
-      await delay(3000);
+      const waitMs = pollCount < 3 ? TASK_POLL_INTERVAL_FAST_MS : TASK_POLL_INTERVAL_SLOW_MS;
+      await delay(waitMs);
+      pollCount += 1;
       const task = await lookupTask(taskId, true);
       if (!task) {
         throw new Error(text.redeem.errors.redeemFailed);
