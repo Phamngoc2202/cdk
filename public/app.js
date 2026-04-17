@@ -27,8 +27,7 @@ const TEXT = {
       title: "Đổi ChatGPT CDK",
       subtitle: "",
       guideTitle: "Hướng dẫn thao tác",
-      guideBody:
-        "Luồng đổi CDK giữ cách bố trí của trang gốc: bên trái là hướng dẫn, bên phải là xác minh CDK, AuthSession và theo dõi task.",
+      guideBody: "",
       formTitle: "Xác minh và đổi CDK",
       taskPanelTitle: "Tra cứu task",
       footer: "",
@@ -106,7 +105,7 @@ const TEXT = {
     },
     query: {
       title: "Tra cứu CDK hàng loạt",
-      subtitle: "Trang tra cứu dùng cùng ngôn ngữ và phong cách giao diện với trang redeem.",
+      subtitle: "",
       inputTitle: "Danh sách CDK",
       inputHint: "Mỗi dòng một CDK.",
       timezoneNote: "Tra cứu CDK theo giờ Việt Nam GMT+7",
@@ -178,8 +177,7 @@ const TEXT = {
       title: "Redeem ChatGPT CDK",
       subtitle: "",
       guideTitle: "How it works",
-      guideBody:
-        "The layout mirrors the original flow: guide on the left, CDK and AuthSession verification on the right, then task tracking below.",
+      guideBody: "",
       formTitle: "Validate and redeem",
       taskPanelTitle: "Task lookup",
       footer: "",
@@ -257,7 +255,7 @@ const TEXT = {
     },
     query: {
       title: "Batch CDK Query",
-      subtitle: "The query page uses the same visual language and the same two-language setup as the redeem page.",
+      subtitle: "",
       inputTitle: "CDK list",
       inputHint: "Use one CDK per line.",
       timezoneNote: "CDK query uses Vietnam time GMT+7",
@@ -957,7 +955,7 @@ function renderGuideSteps() {
       <div class="panel-header">
         <span class="panel-tag">${escapeHtml(text.redeem.guideTitle)}</span>
         <h2>${escapeHtml(text.redeem.guideTitle)}</h2>
-        <p>${escapeHtml(text.redeem.guideBody)}</p>
+        ${text.redeem.guideBody ? `<p>${escapeHtml(text.redeem.guideBody)}</p>` : ""}
       </div>
       <div class="guide-actions">
         <a class="secondary-button link-button" href="https://chatgpt.com/" target="_blank" rel="noreferrer">${escapeHtml(
