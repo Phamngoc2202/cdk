@@ -52,6 +52,9 @@ async function fetchCompat(url, options = {}) {
     );
 
     req.on("error", reject);
+    req.setTimeout(20000, () => {
+      req.destroy(new Error("upstream_timeout"));
+    });
 
     if (options.body != null) {
       req.write(options.body);
@@ -70,6 +73,11 @@ function setProxyResult(res, response, text) {
 
 function setCacheHeaders(res, pathname, isIndex = false) {
   if (isIndex) {
+    res.set("Cache-Control", "no-store, max-age=0");
+    return;
+  }
+
+  if (pathname === "/app.js" || pathname === "/styles.css" || pathname === "/favicon.svg") {
     res.set("Cache-Control", "no-store, max-age=0");
     return;
   }
