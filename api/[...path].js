@@ -47,6 +47,20 @@ function sendBuffer(res, status, buffer, contentType) {
   res.end(buffer);
 }
 
+function setCacheHeaders(res, pathname, isIndex = false) {
+  if (isIndex) {
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    return;
+  }
+
+  if (pathname.startsWith("/assets/")) {
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    return;
+  }
+
+  res.setHeader("Cache-Control", "public, max-age=300");
+}
+
 function parseBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -242,7 +256,12 @@ function safePublicPath(pathname) {
 
 function serveIndex(res) {
   const html = fs.readFileSync(INDEX_FILE, "utf8");
+  setCacheHeaders(res, "/", true);
   sendText(res, 200, html, "text/html; charset=utf-8");
+}
+
+function isStaticFileRequest(pathname) {
+  return pathname.startsWith("/assets/") || /\.[a-z0-9]+$/i.test(pathname);
 }
 
 function serveStaticOrIndex(res, pathname) {
@@ -254,7 +273,13 @@ function serveStaticOrIndex(res, pathname) {
   const filePath = safePublicPath(pathname);
   if (filePath && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
     const content = fs.readFileSync(filePath);
+    setCacheHeaders(res, pathname, false);
     sendBuffer(res, 200, content, getContentType(filePath));
+    return;
+  }
+
+  if (isStaticFileRequest(pathname)) {
+    sendText(res, 404, "Not Found");
     return;
   }
 

@@ -68,6 +68,24 @@ function setProxyResult(res, response, text) {
   res.send(text);
 }
 
+function setCacheHeaders(res, pathname, isIndex = false) {
+  if (isIndex) {
+    res.set("Cache-Control", "no-store, max-age=0");
+    return;
+  }
+
+  if (pathname.startsWith("/assets/")) {
+    res.set("Cache-Control", "public, max-age=31536000, immutable");
+    return;
+  }
+
+  res.set("Cache-Control", "public, max-age=300");
+}
+
+function isStaticFileRequest(pathname) {
+  return pathname.startsWith("/assets/") || /\.[a-z0-9]+$/i.test(pathname);
+}
+
 async function proxyResponse(res, url, options = {}) {
   try {
     const response = await fetchCompat(url, options);
@@ -149,9 +167,25 @@ app.use("/api", (_req, res) => {
   });
 });
 
-app.use(express.static(publicDir));
+app.use((req, res, next) => {
+  setCacheHeaders(res, req.path || "/", false);
+  next();
+});
+
+app.use(express.static(publicDir, {
+  fallthrough: true,
+}));
+
+app.use((req, res, next) => {
+  if (isStaticFileRequest(req.path || "/")) {
+    res.status(404).send("Not Found");
+    return;
+  }
+  next();
+});
 
 app.use((_req, res) => {
+  setCacheHeaders(res, "/", true);
   res.sendFile(indexFile);
 });
 
