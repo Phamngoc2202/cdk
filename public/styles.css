@@ -666,6 +666,8 @@ body[data-theme="dark"] .inline-info {
 
 .primary-bar {
   padding-top: 4px;
+  display: grid;
+  gap: 10px;
 }
 
 .data-grid {

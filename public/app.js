@@ -67,6 +67,7 @@ const TEXT = {
         validateCdk: "Kiểm tra CDK",
         validateAccount: "Kiểm tra tài khoản",
         redeem: "Bắt đầu đổi",
+        clear: "Xóa dữ liệu",
         queryTask: "Tra cứu",
       },
       sections: {
@@ -217,6 +218,7 @@ const TEXT = {
         validateCdk: "Validate CDK",
         validateAccount: "Validate account",
         redeem: "Start redeem",
+        clear: "Clear",
         queryTask: "Check task",
       },
       sections: {
@@ -926,6 +928,24 @@ function getVisibleQueryResults() {
   return state.query.results.filter((item) => item.status === state.query.activeTab);
 }
 
+function clearRedeemState() {
+  state.redeem.cdk = "";
+  state.redeem.account = "";
+  state.redeem.cdkStatus = "";
+  state.redeem.accountStatus = "";
+  state.redeem.cdkData = null;
+  state.redeem.accountData = null;
+  state.redeem.cdkValidatedValue = "";
+  state.redeem.accountValidatedValue = "";
+  state.redeem.taskId = "";
+  state.redeem.taskStatus = "";
+  state.redeem.taskMessage = "";
+  state.redeem.taskProgress = 0;
+  state.redeem.lookupTaskId = "";
+  state.redeem.lookupLoading = false;
+  clearNotice();
+}
+
 function renderModal() {
   if (!state.notice) {
     return "";
@@ -1164,6 +1184,11 @@ function renderRedeemPage(route) {
                   state.redeem.redeeming ? "disabled" : ""
                 }>
                   ${state.redeem.redeeming ? escapeHtml(text.common.loading) : escapeHtml(text.redeem.buttons.redeem)}
+                </button>
+                <button type="button" class="secondary-button primary-button--wide" data-action="clear-redeem" ${
+                  state.redeem.redeeming ? "disabled" : ""
+                }>
+                  ${escapeHtml(text.redeem.buttons.clear)}
                 </button>
               </div>
             </form>
@@ -1443,6 +1468,11 @@ app.addEventListener("click", async (event) => {
 
   if (action === "validate-account") {
     await validateAccount();
+    return;
+  }
+
+  if (action === "clear-redeem") {
+    clearRedeemState();
     return;
   }
 
